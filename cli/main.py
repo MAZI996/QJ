@@ -1488,6 +1488,85 @@ def crypto_hotlist(
     console.print(table)
 
 
+@app.command("crypto-attention-ingest")
+def crypto_attention_ingest(
+    text: Optional[str] = typer.Option(
+        None,
+        "--text",
+        help="Raw social/forum text to parse for hot crypto symbols.",
+    ),
+    file: Optional[Path] = typer.Option(
+        None,
+        "--file",
+        help="UTF-8 text file containing posts/messages to parse.",
+    ),
+    source: str = typer.Option(
+        "manual-text",
+        "--source",
+        help="Source label, e.g. x, binance-square, forum, telegram.",
+    ),
+    min_mentions: int = typer.Option(
+        1,
+        "--min-mentions",
+        help="Minimum mentions required before a symbol enters the hotlist.",
+    ),
+    ttl_hours: float = typer.Option(
+        24.0,
+        "--ttl-hours",
+        help="How long extracted symbols stay active.",
+    ),
+    dry_run: bool = typer.Option(
+        False,
+        "--dry-run",
+        help="Show extracted candidates without writing hotlist.",
+    ),
+):
+    """Parse attention text and write discovered symbols into the hotlist."""
+
+    from tradingagents.crypto import CryptoTradingConfig
+    from tradingagents.crypto.attention import (
+        candidates_to_hot_symbols,
+        extract_attention_candidates,
+    )
+    from tradingagents.crypto.hotlist import merge_hot_symbols
+
+    chunks: list[str] = []
+    if text:
+        chunks.append(text)
+    if file:
+        chunks.append(file.read_text(encoding="utf-8"))
+    if not chunks:
+        raise typer.BadParameter("Provide --text or --file.")
+
+    config = CryptoTradingConfig.from_env()
+    candidates = extract_attention_candidates(
+        "\n".join(chunks),
+        min_mentions=min_mentions,
+    )
+
+    table = Table(title="Attention Candidates", box=box.SIMPLE_HEAVY)
+    table.add_column("交易对", style="bold")
+    table.add_column("分数", justify="right")
+    table.add_column("提及次数", justify="right")
+    table.add_column("原因")
+    for candidate in candidates:
+        table.add_row(
+            candidate.symbol,
+            f"{candidate.score:.2f}",
+            str(candidate.mentions),
+            candidate.reason,
+        )
+    console.print(table)
+
+    if dry_run:
+        console.print("[yellow]Dry run: hotlist was not updated.[/yellow]")
+        return
+
+    entries = candidates_to_hot_symbols(candidates, source=source, ttl_hours=ttl_hours)
+    merge_hot_symbols(config.hotlist_path, entries)
+    console.print(f"[green]Hotlist updated:[/green] {config.hotlist_path}")
+
+
 @app.command("crypto-account")
 def crypto_account():
     """Show non-zero Binance balances for personal-account API verification."""

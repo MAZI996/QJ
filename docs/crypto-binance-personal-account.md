@@ -85,6 +85,14 @@ TRADINGAGENTS_CRYPTO_EMERGENCY_STOP_FILE=C:\tradingagents-stop.txt
 python -m cli.main crypto-hotlist --add SOLUSDT,WIFUSDT --source binance-square --reason "高流量帖子和发帖量上升"
 ```
 
+也可以把帖子、群聊、论坛内容作为文本交给注意力解析器，让它自动提取 `$SOL`、`SOLUSDT`、`#WIF` 这类币种符号并写入 hotlist：
+
+```powershell
+python -m cli.main crypto-attention-ingest --source x --text '$SOL 突然很多人讨论，币安广场也在刷，WIFUSDT 成交量拉起来了'
+python -m cli.main crypto-attention-ingest --source binance-square --file .\square-posts.txt
+python -m cli.main crypto-attention-ingest --source x --file .\posts.txt --dry-run
+```
+
 默认文件是 `~/.tradingagents/crypto/hotlist.json`。`crypto-scan` 默认会把 hotlist 里的有效交易对合并进扫描范围，并作为 Lana-inspired 策略的热度信号。需要临时关闭时：
 
 ```powershell
@@ -95,6 +103,7 @@ python -m cli.main crypto-scan --symbols BTCUSDT,ETHUSDT --no-hotlist --mode ana
 
 ```powershell
 python -m cli.main crypto-account
+python -m cli.main crypto-attention-ingest --source x --text '$SOL 和 #WIF 在讨论区升温'
 python -m cli.main crypto-hotlist --add SOLUSDT --source x --reason "X 和币安广场讨论升温"
 python -m cli.main crypto-hotlist
 python -m cli.main crypto-scan --symbols BTCUSDT,ETHUSDT --mode analysis

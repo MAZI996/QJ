@@ -112,6 +112,17 @@ def add_hot_symbol(
     return entry
 
 
+def merge_hot_symbols(path: Path, new_entries: list[HotSymbol]) -> list[HotSymbol]:
+    merged = {entry.symbol: entry for entry in load_hotlist(path)}
+    for entry in new_entries:
+        existing = merged.get(entry.symbol)
+        if existing is None or entry.score >= existing.score:
+            merged[entry.symbol] = entry
+    entries = list(merged.values())
+    save_hotlist(path, entries)
+    return entries
+
+
 def filter_hotlist(
     entries: list[HotSymbol],
     max_age_hours: float,
