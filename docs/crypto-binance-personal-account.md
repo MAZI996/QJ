@@ -26,12 +26,16 @@ TRADINGAGENTS_CRYPTO_INTERVAL=15m
 TRADINGAGENTS_CRYPTO_ACCOUNT_EQUITY_USDT=10000
 TRADINGAGENTS_CRYPTO_RISK_PER_TRADE_PCT=0.005
 TRADINGAGENTS_CRYPTO_MAX_LOSS_PER_TRADE_USDT=0
+TRADINGAGENTS_CRYPTO_DAILY_LOSS_LIMIT_USDT=0
 TRADINGAGENTS_CRYPTO_MAX_POSITION_PCT=0.10
 TRADINGAGENTS_CRYPTO_MIN_CONFIDENCE=0.62
+TRADINGAGENTS_CRYPTO_PROTECTIVE_OCO_ENABLED=false
+TRADINGAGENTS_CRYPTO_PROTECTIVE_STOP_LIMIT_SLIPPAGE_PCT=0.003
 TRADINGAGENTS_CRYPTO_LANA_STRATEGY_ENABLED=true
 TRADINGAGENTS_CRYPTO_LANA_HOT_SYMBOLS=BTCUSDT,ETHUSDT
 TRADINGAGENTS_CRYPTO_HOTLIST_ENABLED=true
 TRADINGAGENTS_CRYPTO_HOTLIST_PATH=C:\Users\you\.tradingagents\crypto\hotlist.json
+TRADINGAGENTS_CRYPTO_ATTENTION_SOURCE_DIR=C:\Users\you\.tradingagents\crypto\attention_sources
 TRADINGAGENTS_CRYPTO_HOTLIST_MAX_AGE_HOURS=24
 TRADINGAGENTS_CRYPTO_HOTLIST_MIN_SCORE=0
 TRADINGAGENTS_CRYPTO_LANA_MIN_PRICE_CHANGE_PCT=3
@@ -108,11 +112,17 @@ python -m cli.main crypto-account
 python -m cli.main crypto-attention-ingest --source x --text '$SOL 和 #WIF 在讨论区升温'
 python -m cli.main crypto-hotlist --add SOLUSDT --source x --reason "X 和币安广场讨论升温"
 python -m cli.main crypto-hotlist
+python -m cli.main crypto-attention-harvest
 python -m cli.main crypto-scan --symbols BTCUSDT,ETHUSDT --mode analysis
 python -m cli.main crypto-scan --symbols BTCUSDT,ETHUSDT,SOLUSDT --hot-symbols SOLUSDT --mode analysis
 python -m cli.main crypto-scan --symbols BTCUSDT,ETHUSDT --mode analysis --ai-review
 python -m cli.main crypto-autopilot --symbols BTCUSDT,ETHUSDT,SOLUSDT --mode analysis
 python -m cli.main crypto-autopilot --symbols BTCUSDT,ETHUSDT --mode paper --execute-top --cycles 0 --interval-seconds 300
+python -m cli.main crypto-positions
+python -m cli.main crypto-performance
+python -m cli.main crypto-protective-plan
+python -m cli.main crypto-recover-orders --symbols BTCUSDT,ETHUSDT
+python -m cli.main crypto-hermes-check
 python -m cli.main crypto-scan --symbols BTCUSDT,ETHUSDT --mode paper --execute-top
 python -m cli.main crypto-scan --symbols BTCUSDT --mode testnet --execute-top
 ```

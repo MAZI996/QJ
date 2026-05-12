@@ -6,6 +6,8 @@ from .binance_client import BinanceClient
 from .config import CryptoTradingConfig
 from .models import ExecutionMode, OrderIntent, OrderResult
 from .paper import PaperBroker
+from .positions import PositionStore
+from .protective_orders import plan_from_intent
 
 
 class ExecutionRouter:
@@ -13,6 +15,7 @@ class ExecutionRouter:
         self.client = client
         self.config = config
         self.paper = PaperBroker(config)
+        self.positions = PositionStore.from_state_dir(config.state_dir)
 
     def execute(
         self,
@@ -22,7 +25,10 @@ class ExecutionRouter:
     ) -> OrderResult:
         selected_mode = mode or self.config.execution_mode
         if self.config.emergency_stop_file and self.config.emergency_stop_file.exists():
-            return self._blocked(intent, f"急停文件存在，拒绝执行：{self.config.emergency_stop_file}")
+            return self._blocked(
+                intent,
+                f"Emergency stop file exists: {self.config.emergency_stop_file}",
+            )
 
         if selected_mode == "analysis":
             return OrderResult(
@@ -31,11 +37,13 @@ class ExecutionRouter:
                 symbol=intent.symbol,
                 side=intent.side,
                 quantity=intent.quantity,
-                message="分析模式只生成交易意图，不提交订单",
+                message="Analysis mode only creates an order intent; no order is submitted.",
             )
 
         if selected_mode == "paper":
-            return self.paper.execute(intent)
+            result = self.paper.execute(intent)
+            self.positions.apply_order_result(intent, result)
+            return result
 
         if selected_mode == "testnet":
             payload = self.client.test_market_order(intent.symbol, intent.side, intent.quantity)
@@ -45,29 +53,57 @@ class ExecutionRouter:
                 symbol=intent.symbol,
                 side=intent.side,
                 quantity=intent.quantity,
-                message="Binance test order 已通过，未产生真实成交",
+                message="Binance test order accepted; no real fill was created.",
                 exchange_payload=payload,
             )
 
         if selected_mode == "live":
             if not self.config.enable_live_orders:
-                return self._blocked(intent, "实盘开关未开启：TRADINGAGENTS_CRYPTO_ENABLE_LIVE_ORDERS=true")
+                return self._blocked(
+                    intent,
+                    "Live switch is disabled: set TRADINGAGENTS_CRYPTO_ENABLE_LIVE_ORDERS=true.",
+            )
             if live_confirmation != self.config.live_confirm_phrase:
-                return self._blocked(intent, "缺少实盘确认短语，拒绝提交真实订单")
+                return self._blocked(
+                    intent,
+                    "Missing live confirmation phrase; refusing real order.",
+                )
             if self.config.testnet:
-                return self._blocked(intent, "当前仍是 Testnet 配置，不能当作实盘提交")
+                return self._blocked(
+                    intent,
+                    "Current config is still testnet; refusing real order.",
+                )
             payload = self.client.create_market_order(intent.symbol, intent.side, intent.quantity)
-            return OrderResult(
+            result = OrderResult(
                 mode="live",
                 accepted=True,
                 symbol=intent.symbol,
                 side=intent.side,
                 quantity=intent.quantity,
-                message="真实 Binance 现货市价单已提交，必须立刻用订单查询或用户数据流确认最终状态",
+                message=(
+                    "Real Binance spot market order submitted; confirm final state "
+                    "with order query or user data stream immediately."
+                ),
                 exchange_payload=payload,
             )
+            self.positions.apply_order_result(intent, result)
+            protected_payload = self._place_live_protection(intent)
+            if protected_payload:
+                result.exchange_payload["protective_order"] = protected_payload
+            return result
 
-        return self._blocked(intent, f"未知执行模式：{selected_mode}")
+        return self._blocked(intent, f"Unknown execution mode: {selected_mode}")
+
+    def _place_live_protection(self, intent: OrderIntent) -> dict:
+        if not self.config.protective_oco_enabled:
+            return {}
+        plan = plan_from_intent(intent, self.config)
+        if plan is None:
+            return {"skipped": "missing stop_loss or take_profit"}
+        try:
+            return self.client.create_oco_sell_order(plan.to_binance_params())
+        except Exception as exc:
+            return {"error": str(exc), "plan": plan.to_binance_params()}
 
     @staticmethod
     def _blocked(intent: OrderIntent, reason: str) -> OrderResult:

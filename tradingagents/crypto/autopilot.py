@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterator
 
+from .circuit_breaker import DailyLossCircuitBreaker
 from .config import CryptoTradingConfig
 from .decision_journal import DecisionJournalWrite, write_workflow_report
 from .models import ExecutionMode
@@ -108,6 +109,15 @@ class CryptoAutoPilot:
                 saved=None,
                 stopped=True,
                 reason=stop_reason,
+            )
+        breaker = DailyLossCircuitBreaker(self.config).evaluate()
+        if breaker.blocked:
+            return AutoPilotCycleResult(
+                cycle=cycle,
+                report=None,
+                saved=None,
+                stopped=True,
+                reason=breaker.reason,
             )
 
         mode = execution_mode or self.config.execution_mode

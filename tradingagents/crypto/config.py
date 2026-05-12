@@ -62,13 +62,17 @@ class CryptoTradingConfig:
     max_loss_per_trade_usdt: float = 0.0
     max_position_pct: float = 0.10
     daily_loss_limit_pct: float = 0.03
+    daily_loss_limit_usdt: float = 0.0
     min_confidence: float = 0.62
     min_order_notional_usdt: float = 10.0
+    protective_oco_enabled: bool = False
+    protective_stop_limit_slippage_pct: float = 0.003
 
     lana_strategy_enabled: bool = True
     lana_hot_symbols: tuple[str, ...] = ()
     hotlist_enabled: bool = True
     hotlist_path: Path = Path.home() / ".tradingagents" / "crypto" / "hotlist.json"
+    attention_source_dir: Path = Path.home() / ".tradingagents" / "crypto" / "attention_sources"
     hotlist_max_age_hours: float = 24.0
     hotlist_min_score: float = 0.0
     lana_min_price_change_pct: float = 3.0
@@ -134,8 +138,14 @@ class CryptoTradingConfig:
             max_loss_per_trade_usdt=_float_env(prefix + "MAX_LOSS_PER_TRADE_USDT", 0.0),
             max_position_pct=_float_env(prefix + "MAX_POSITION_PCT", 0.10),
             daily_loss_limit_pct=_float_env(prefix + "DAILY_LOSS_LIMIT_PCT", 0.03),
+            daily_loss_limit_usdt=_float_env(prefix + "DAILY_LOSS_LIMIT_USDT", 0.0),
             min_confidence=_float_env(prefix + "MIN_CONFIDENCE", 0.62),
             min_order_notional_usdt=_float_env(prefix + "MIN_ORDER_NOTIONAL_USDT", 10.0),
+            protective_oco_enabled=_bool_env(prefix + "PROTECTIVE_OCO_ENABLED", False),
+            protective_stop_limit_slippage_pct=_float_env(
+                prefix + "PROTECTIVE_STOP_LIMIT_SLIPPAGE_PCT",
+                0.003,
+            ),
             lana_strategy_enabled=_bool_env(prefix + "LANA_STRATEGY_ENABLED", True),
             lana_hot_symbols=_list_env(prefix + "LANA_HOT_SYMBOLS", ()),
             hotlist_enabled=_bool_env(prefix + "HOTLIST_ENABLED", True),
@@ -143,6 +153,12 @@ class CryptoTradingConfig:
                 os.getenv(
                     prefix + "HOTLIST_PATH",
                     str(Path.home() / ".tradingagents" / "crypto" / "hotlist.json"),
+                )
+            ),
+            attention_source_dir=Path(
+                os.getenv(
+                    prefix + "ATTENTION_SOURCE_DIR",
+                    str(Path.home() / ".tradingagents" / "crypto" / "attention_sources"),
                 )
             ),
             hotlist_max_age_hours=_float_env(prefix + "HOTLIST_MAX_AGE_HOURS", 24.0),

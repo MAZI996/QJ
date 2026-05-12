@@ -56,6 +56,10 @@ class BinanceClient:
             quote_volume_24h=float(payload["quoteVolume"]),
         )
 
+    def get_server_time(self) -> int:
+        payload = self._public_get("/api/v3/time", {})
+        return int(payload["serverTime"])
+
     def get_open_interest_history(
         self,
         symbol: str,
@@ -118,6 +122,24 @@ class BinanceClient:
                 balances.append(AccountBalance(asset=row["asset"], free=free, locked=locked))
         return balances
 
+    def get_open_orders(self, symbol: str | None = None) -> list[dict[str, Any]]:
+        params = {"symbol": symbol.upper()} if symbol else {}
+        payload = self._signed_get("/api/v3/openOrders", params)
+        return payload if isinstance(payload, list) else []
+
+    def get_order(self, symbol: str, order_id: str | int) -> dict[str, Any]:
+        return self._signed_get(
+            "/api/v3/order",
+            {"symbol": symbol.upper(), "orderId": order_id},
+        )
+
+    def get_my_trades(self, symbol: str, limit: int = 50) -> list[dict[str, Any]]:
+        payload = self._signed_get(
+            "/api/v3/myTrades",
+            {"symbol": symbol.upper(), "limit": limit},
+        )
+        return payload if isinstance(payload, list) else []
+
     def test_market_order(self, symbol: str, side: str, quantity: float) -> dict[str, Any]:
         return self._signed_post(
             "/api/v3/order/test",
@@ -139,6 +161,9 @@ class BinanceClient:
                 "quantity": self._format_quantity(quantity),
             },
         )
+
+    def create_oco_sell_order(self, params: Mapping[str, Any]) -> dict[str, Any]:
+        return self._signed_post("/api/v3/orderList/oco", params)
 
     def _public_get(self, path: str, params: Mapping[str, Any]) -> Any:
         return self._request("GET", path, params=params, signed=False)

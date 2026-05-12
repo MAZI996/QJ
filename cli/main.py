@@ -1851,6 +1851,200 @@ def crypto_attention_ingest(
     console.print(f"[green]Hotlist updated:[/green] {config.hotlist_path}")
 
 
+@app.command("crypto-attention-harvest")
+def crypto_attention_harvest(
+    source_dir: Optional[Path] = typer.Option(
+        None,
+        "--source-dir",
+        help="Directory of UTF-8 .txt files collected from X, Binance Square, forums, or news.",
+    ),
+    source: str = typer.Option(
+        "auto-harvest",
+        "--source",
+        help="Source label stored in the hotlist.",
+    ),
+    min_mentions: int = typer.Option(
+        1,
+        "--min-mentions",
+        help="Minimum mentions before a symbol enters the hotlist.",
+    ),
+    ttl_hours: float = typer.Option(
+        24.0,
+        "--ttl-hours",
+        help="How long harvested symbols stay active.",
+    ),
+):
+    """Harvest local attention text files into the hotlist."""
+
+    from tradingagents.crypto import AttentionHarvester, CryptoTradingConfig
+
+    config = CryptoTradingConfig.from_env()
+    result = AttentionHarvester(config).harvest(
+        source_dir=source_dir,
+        source=source,
+        min_mentions=min_mentions,
+        ttl_hours=ttl_hours,
+    )
+    console.print(
+        Panel(
+            f"files={result.files_read} | candidates={result.candidates_found}",
+            title="Crypto Attention Harvest",
+            border_style="cyan",
+        )
+    )
+    console.print(f"[green]Hotlist:[/green] {result.hotlist_path}")
+
+
+@app.command("crypto-positions")
+def crypto_positions():
+    """Show locally tracked crypto positions."""
+
+    from tradingagents.crypto import CryptoTradingConfig, PositionStore
+
+    config = CryptoTradingConfig.from_env()
+    records = PositionStore.from_state_dir(config.state_dir).load()
+    table = Table(title=f"Crypto Positions: {config.state_dir}", box=box.SIMPLE_HEAVY)
+    table.add_column("Symbol", style="bold")
+    table.add_column("Status")
+    table.add_column("Quantity", justify="right")
+    table.add_column("Avg Entry", justify="right")
+    table.add_column("Stop", justify="right")
+    table.add_column("Take Profit", justify="right")
+    table.add_column("Realized PnL", justify="right")
+    for item in records.values():
+        table.add_row(
+            item.symbol,
+            item.status,
+            f"{item.quantity:.8f}",
+            f"{item.avg_entry_price:.8f}",
+            f"{item.stop_loss:.8f}" if item.stop_loss else "-",
+            f"{item.take_profit:.8f}" if item.take_profit else "-",
+            f"{item.realized_pnl_usdt:.4f}",
+        )
+    console.print(table)
+
+
+@app.command("crypto-protective-plan")
+def crypto_protective_plan():
+    """Print OCO-style protective sell plans for open positions."""
+
+    from tradingagents.crypto import CryptoTradingConfig, PositionStore
+    from tradingagents.crypto.protective_orders import plan_from_position
+
+    config = CryptoTradingConfig.from_env()
+    positions = PositionStore.from_state_dir(config.state_dir).active_positions()
+    table = Table(title="Protective Order Plans", box=box.SIMPLE_HEAVY)
+    table.add_column("Symbol", style="bold")
+    table.add_column("Quantity", justify="right")
+    table.add_column("Take Profit", justify="right")
+    table.add_column("Stop", justify="right")
+    table.add_column("Stop Limit", justify="right")
+    for position in positions:
+        plan = plan_from_position(position, config)
+        if plan is None:
+            continue
+        table.add_row(
+            plan.symbol,
+            f"{plan.quantity:.8f}",
+            f"{plan.take_profit_price:.8f}",
+            f"{plan.stop_price:.8f}",
+            f"{plan.stop_limit_price:.8f}",
+        )
+    console.print(table)
+
+
+@app.command("crypto-recover-orders")
+def crypto_recover_orders(
+    symbols: str = typer.Option(
+        ...,
+        "--symbols",
+        help="Comma-separated Binance spot symbols to recover, e.g. BTCUSDT,ETHUSDT.",
+    ),
+):
+    """Recover local position state from Binance account trades and open orders."""
+
+    from tradingagents.crypto import CryptoTradingConfig, OrderRecoveryService
+    from tradingagents.crypto.binance_client import BinanceClient
+
+    config = CryptoTradingConfig.from_env()
+    service = OrderRecoveryService(BinanceClient(config), config)
+    table = Table(title="Order Recovery", box=box.SIMPLE_HEAVY)
+    table.add_column("Symbol", style="bold")
+    table.add_column("Open Orders", justify="right")
+    table.add_column("Trades", justify="right")
+    table.add_column("Updated")
+    table.add_column("Message")
+    for symbol in [item.strip().upper() for item in symbols.split(",") if item.strip()]:
+        result = service.recover_symbol(symbol)
+        table.add_row(
+            result.symbol,
+            str(result.open_orders),
+            str(result.trades_seen),
+            "yes" if result.position_updated else "no",
+            result.message,
+        )
+    console.print(table)
+
+
+@app.command("crypto-performance")
+def crypto_performance():
+    """Summarize local paper/live position performance."""
+
+    from tradingagents.crypto import CryptoTradingConfig, summarize_performance
+
+    config = CryptoTradingConfig.from_env()
+    summary = summarize_performance(config)
+    table = Table(title="Crypto Performance", box=box.SIMPLE_HEAVY)
+    table.add_column("Metric")
+    table.add_column("Value", justify="right")
+    table.add_row("Open positions", str(summary.open_positions))
+    table.add_row("Closed positions", str(summary.closed_positions))
+    table.add_row("Realized PnL USDT", f"{summary.realized_pnl_usdt:.4f}")
+    table.add_row("Unrealized PnL USDT", f"{summary.unrealized_pnl_usdt:.4f}")
+    table.add_row("Wins", str(summary.wins))
+    table.add_row("Losses", str(summary.losses))
+    table.add_row("Win rate", f"{summary.win_rate:.2%}")
+    console.print(table)
+
+
+@app.command("crypto-hermes-check")
+def crypto_hermes_check():
+    """Check whether the configured Hermes model router is reachable."""
+
+    from tradingagents.crypto import CryptoTradingConfig
+    from tradingagents.crypto.llm_router import CryptoLLMRouterNotReady, HermesReviewLLM
+
+    config = CryptoTradingConfig.from_env()
+    if config.ai_router.strip().lower() != "hermes":
+        console.print(
+            Panel(
+                (
+                    f"router={config.ai_router}; set "
+                    "TRADINGAGENTS_CRYPTO_AI_ROUTER=hermes to check Hermes."
+                ),
+                title="Hermes Router",
+                border_style="yellow",
+            )
+        )
+        return
+    try:
+        status = HermesReviewLLM(config).healthcheck()
+    except CryptoLLMRouterNotReady as exc:
+        console.print(f"[red]{exc}[/red]")
+        return
+    color = "green" if status.ready else "red"
+    console.print(
+        Panel(
+            (
+                f"ready={status.ready} | model={status.model} | "
+                f"base={status.base_url}\n{status.message}"
+            ),
+            title="Hermes Router",
+            border_style=color,
+        )
+    )
+
+
 @app.command("crypto-account")
 def crypto_account():
     """Show non-zero Binance balances for personal-account API verification."""

@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import urllib.error
 import urllib.request
+from dataclasses import dataclass
 from typing import Any
 
 from .config import CryptoTradingConfig
@@ -12,6 +13,15 @@ from .config import CryptoTradingConfig
 
 class CryptoLLMRouterNotReady(RuntimeError):
     """Raised when a configured LLM router has no adapter yet."""
+
+
+@dataclass(frozen=True)
+class HermesRouterStatus:
+    ready: bool
+    router: str
+    model: str
+    base_url: str
+    message: str
 
 
 def create_crypto_review_llm(config: CryptoTradingConfig):
@@ -90,6 +100,50 @@ class HermesReviewLLM:
         content = self._extract_content(json.loads(raw))
         return _LLMResponse(content=content)
 
+    def healthcheck(self) -> HermesRouterStatus:
+        if not self.config.hermes_base_url:
+            return HermesRouterStatus(False, "hermes", self.config.ai_model, "", "missing base url")
+        if not self.config.ai_model:
+            return HermesRouterStatus(
+                False,
+                "hermes",
+                "",
+                self.config.hermes_base_url,
+                "missing model",
+            )
+        url = f"{self.config.hermes_base_url.rstrip('/')}/models"
+        request = urllib.request.Request(url, method="GET", headers=self._headers())
+        try:
+            with urllib.request.urlopen(
+                request,
+                timeout=self.config.hermes_timeout_seconds,
+            ) as response:
+                payload = json.loads(response.read().decode("utf-8"))
+        except Exception as exc:
+            return HermesRouterStatus(
+                False,
+                "hermes",
+                self.config.ai_model,
+                self.config.hermes_base_url,
+                str(exc),
+            )
+        available = _models_from_payload(payload)
+        if available and self.config.ai_model not in available:
+            return HermesRouterStatus(
+                False,
+                "hermes",
+                self.config.ai_model,
+                self.config.hermes_base_url,
+                f"model not listed by Hermes: {self.config.ai_model}",
+            )
+        return HermesRouterStatus(
+            True,
+            "hermes",
+            self.config.ai_model,
+            self.config.hermes_base_url,
+            "Hermes router is reachable.",
+        )
+
     def _chat_url(self) -> str:
         base = self.config.hermes_base_url.rstrip("/")
         if base.endswith("/chat/completions"):
@@ -118,3 +172,15 @@ class HermesReviewLLM:
 class _LLMResponse:
     def __init__(self, content: str):
         self.content = content
+
+
+def _models_from_payload(payload: dict[str, Any]) -> set[str]:
+    rows = payload.get("data") or payload.get("models") or []
+    models: set[str] = set()
+    if isinstance(rows, list):
+        for item in rows:
+            if isinstance(item, str):
+                models.add(item)
+            elif isinstance(item, dict) and isinstance(item.get("id"), str):
+                models.add(item["id"])
+    return models
