@@ -56,6 +56,10 @@ class BinanceClient:
             quote_volume_24h=float(payload["quoteVolume"]),
         )
 
+    def ping(self) -> dict[str, Any]:
+        payload = self._public_get("/api/v3/ping", {})
+        return payload if isinstance(payload, dict) else {}
+
     def get_server_time(self) -> int:
         payload = self._public_get("/api/v3/time", {})
         return int(payload["serverTime"])
@@ -113,7 +117,7 @@ class BinanceClient:
         )
 
     def get_account_balances(self) -> list[AccountBalance]:
-        payload = self._signed_get("/api/v3/account", {})
+        payload = self.get_account_info()
         balances = []
         for row in payload.get("balances", []):
             free = float(row.get("free", "0"))
@@ -121,6 +125,10 @@ class BinanceClient:
             if free > 0 or locked > 0:
                 balances.append(AccountBalance(asset=row["asset"], free=free, locked=locked))
         return balances
+
+    def get_account_info(self) -> dict[str, Any]:
+        payload = self._signed_get("/api/v3/account", {})
+        return payload if isinstance(payload, dict) else {}
 
     def get_open_orders(self, symbol: str | None = None) -> list[dict[str, Any]]:
         params = {"symbol": symbol.upper()} if symbol else {}
@@ -148,6 +156,22 @@ class BinanceClient:
                 "side": side.upper(),
                 "type": "MARKET",
                 "quantity": self._format_quantity(quantity),
+            },
+        )
+
+    def test_market_order_quote(
+        self,
+        symbol: str,
+        side: str,
+        quote_order_qty: float,
+    ) -> dict[str, Any]:
+        return self._signed_post(
+            "/api/v3/order/test",
+            {
+                "symbol": symbol.upper(),
+                "side": side.upper(),
+                "type": "MARKET",
+                "quoteOrderQty": self._format_quantity(quote_order_qty),
             },
         )
 

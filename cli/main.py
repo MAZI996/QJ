@@ -2072,6 +2072,76 @@ def crypto_account():
     console.print(table)
 
 
+@app.command("crypto-binance-check")
+def crypto_binance_check(
+    symbol: str = typer.Option(
+        "BTCUSDT",
+        "--symbol",
+        help="Binance spot symbol to validate, e.g. BTCUSDT.",
+    ),
+    quote_order_usdt: float = typer.Option(
+        11.0,
+        "--quote-order-usdt",
+        help="Quote notional used for the safe Binance order/test request.",
+    ),
+    test_order: bool = typer.Option(
+        True,
+        "--test-order/--no-test-order",
+        help="Run Binance order/test. It validates order permission but creates no real order.",
+    ),
+    real_binance: bool = typer.Option(
+        False,
+        "--real-binance",
+        help="Use real api.binance.com for this check instead of the default testnet setting.",
+    ),
+):
+    """Run safe Binance account diagnostics for API-key integration."""
+
+    from dataclasses import replace
+
+    from tradingagents.crypto import BinanceDiagnostics, CryptoTradingConfig
+
+    config = CryptoTradingConfig.from_env()
+    if real_binance:
+        config = replace(config, testnet=False)
+    report = BinanceDiagnostics(config).run(
+        symbol=symbol,
+        quote_order_usdt=quote_order_usdt,
+        include_order_test=test_order,
+    )
+    color = "green" if report.ok else "red"
+    console.print(
+        Panel(
+            (
+                f"base={report.base_url} | testnet={report.testnet} | "
+                f"key={report.api_key_present} | secret={report.api_secret_present}"
+            ),
+            title="Binance Account Diagnostics",
+            border_style=color,
+        )
+    )
+    table = Table(title=f"Binance Check: {report.symbol}", box=box.SIMPLE_HEAVY)
+    table.add_column("Step", style="bold")
+    table.add_column("Status")
+    table.add_column("Message")
+    table.add_column("Details")
+    for step in report.steps:
+        status_style = {
+            "PASS": "green",
+            "WARN": "yellow",
+            "FAIL": "red",
+            "SKIP": "dim",
+        }.get(step.status, "white")
+        detail = ", ".join(f"{key}={value}" for key, value in step.details.items())
+        table.add_row(
+            step.name,
+            f"[{status_style}]{step.status}[/{status_style}]",
+            step.message,
+            detail,
+        )
+    console.print(table)
+
+
 @app.command("crypto-base")
 def crypto_base():
     """Show the TradingAgents base-layer contract for this crypto extension."""

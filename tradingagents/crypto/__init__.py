@@ -8,6 +8,7 @@ order path is enabled.
 from .config import CryptoTradingConfig
 from .autopilot import AutoPilotCycleResult, CryptoAutoPilot, CryptoAutoPilotSafetyError
 from .attention_harvester import AttentionHarvester, AttentionHarvestResult
+from .binance_diagnostics import BinanceDiagnosticReport, BinanceDiagnostics
 from .circuit_breaker import CircuitBreakerState, DailyLossCircuitBreaker
 from .decision_journal import DecisionJournalWrite, write_workflow_report
 from .engine import CryptoTradingEngine
@@ -28,6 +29,8 @@ __all__ = [
     "AutoPilotCycleResult",
     "AttentionHarvester",
     "AttentionHarvestResult",
+    "BinanceDiagnosticReport",
+    "BinanceDiagnostics",
     "CircuitBreakerState",
     "CryptoAutoPilot",
     "CryptoAutoPilotSafetyError",

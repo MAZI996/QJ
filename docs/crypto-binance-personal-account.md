@@ -109,6 +109,7 @@ python -m cli.main crypto-scan --symbols BTCUSDT,ETHUSDT --no-hotlist --mode ana
 
 ```powershell
 python -m cli.main crypto-account
+python -m cli.main crypto-binance-check --real-binance --symbol BTCUSDT --quote-order-usdt 11
 python -m cli.main crypto-attention-ingest --source x --text '$SOL 和 #WIF 在讨论区升温'
 python -m cli.main crypto-hotlist --add SOLUSDT --source x --reason "X 和币安广场讨论升温"
 python -m cli.main crypto-hotlist
