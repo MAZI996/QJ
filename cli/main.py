@@ -1361,17 +1361,28 @@ def crypto_scan(
                 console.print(f"  - {rule}")
 
     if ai_review:
-        from tradingagents.default_config import DEFAULT_CONFIG
         from tradingagents.crypto.advisor import CryptoAIAdvisor
-        from tradingagents.llm_clients.factory import create_llm_client
-
-        llm = create_llm_client(
-            provider=DEFAULT_CONFIG["llm_provider"],
-            model=DEFAULT_CONFIG["quick_think_llm"],
-            base_url=DEFAULT_CONFIG.get("backend_url"),
+        from tradingagents.crypto.llm_router import (
+            CryptoLLMRouterNotReady,
+            create_crypto_review_llm,
         )
+
         console.print("\n[bold cyan]AI 评审[/bold cyan]")
-        console.print(Markdown(CryptoAIAdvisor(llm).review(rows)))
+        try:
+            llm = create_crypto_review_llm(config)
+            model_name = config.ai_model or getattr(llm, "model_name", getattr(llm, "model", ""))
+            review = CryptoAIAdvisor(
+                llm,
+                router=config.ai_router,
+                model=model_name,
+            ).review_structured(rows)
+            console.print(Markdown(review.raw_response))
+            console.print(
+                f"[dim]AI router={review.router} model={review.model or '-'} "
+                f"action={review.action} confidence={review.confidence:.2f}[/dim]"
+            )
+        except CryptoLLMRouterNotReady as exc:
+            console.print(f"[yellow]{exc}[/yellow]")
 
 
 @app.command("crypto-account")

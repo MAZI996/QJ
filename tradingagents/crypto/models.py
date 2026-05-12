@@ -9,6 +9,7 @@ from typing import Any, Literal
 
 Side = Literal["BUY", "SELL", "HOLD"]
 ExecutionMode = Literal["analysis", "paper", "testnet", "live"]
+AIAction = Literal["BUY", "HOLD", "REJECT"]
 
 
 @dataclass(frozen=True)
@@ -93,6 +94,18 @@ class RiskDecision:
     reason: str
     intent: OrderIntent | None = None
     rejected_rules: tuple[str, ...] = field(default_factory=tuple)
+
+
+@dataclass(frozen=True)
+class AITradeReview:
+    action: AIAction
+    confidence: float
+    summary: str
+    main_risk: str
+    invalidation: str
+    model: str
+    router: str
+    raw_response: str = ""
 
 
 @dataclass(frozen=True)
