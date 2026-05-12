@@ -1461,12 +1461,26 @@ def crypto_workflow(
         "--hotlist/--no-hotlist",
         help="Merge symbols from the local hotlist into the scan universe.",
     ),
+    save_report: bool = typer.Option(
+        True,
+        "--save-report/--no-save-report",
+        help="Persist the workflow decision journal and per-run report files.",
+    ),
+    journal_dir: Optional[Path] = typer.Option(
+        None,
+        "--journal-dir",
+        help="Directory for decision_journal.jsonl and workflow report files.",
+    ),
 ):
     """Run the crypto scan as a TradingAgents-style role workflow report."""
 
     from dataclasses import replace
 
-    from tradingagents.crypto import CryptoTradingAgentsWorkflow, CryptoTradingConfig
+    from tradingagents.crypto import (
+        CryptoTradingAgentsWorkflow,
+        CryptoTradingConfig,
+        write_workflow_report,
+    )
 
     valid_modes = {"analysis", "paper", "testnet", "live"}
     if mode not in valid_modes:
@@ -1491,7 +1505,9 @@ def crypto_workflow(
 
     selected_symbols = None
     if symbols:
-        selected_symbols = tuple(item.strip().upper() for item in symbols.split(",") if item.strip())
+        selected_symbols = tuple(
+            item.strip().upper() for item in symbols.split(",") if item.strip()
+        )
 
     report = CryptoTradingAgentsWorkflow(config=config).run(
         symbols=selected_symbols,
@@ -1507,7 +1523,25 @@ def crypto_workflow(
             border_style="green",
         )
     )
-    console.print(Markdown(report.render_markdown()))
+    rendered_report = report.render_markdown()
+    console.print(Markdown(rendered_report))
+    if save_report:
+        saved = write_workflow_report(
+            report,
+            state_dir=journal_dir or config.state_dir,
+            context={
+                "command": "crypto-workflow",
+                "symbols": selected_symbols or config.symbols,
+                "interval": config.interval,
+                "ai_review_requested": ai_review,
+                "execute_top": execute_top,
+                "lana_enabled": lana,
+                "hotlist_enabled": hotlist,
+            },
+        )
+        console.print(f"[green]Decision journal:[/green] {saved.jsonl_path}")
+        console.print(f"[dim]Markdown report:[/dim] {saved.markdown_path}")
+        console.print(f"[dim]JSON report:[/dim] {saved.json_path}")
 
 
 @app.command("crypto-hotlist")
