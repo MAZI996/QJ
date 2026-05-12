@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from .binance_client import BinanceAPIError, BinanceClient
 from .config import CryptoTradingConfig
+from .hotlist import load_hot_symbols
 from .indicators import atr, ema, rsi, sma
 from .lana_strategy import LanaInspiredStrategy
 from .models import Candle, OpportunitySignal, TickerSnapshot
@@ -18,7 +19,8 @@ class OpportunityScanner:
         self.lana_strategy = LanaInspiredStrategy(config)
 
     def scan(self, symbols: tuple[str, ...] | None = None) -> list[OpportunitySignal]:
-        selected = symbols or self.config.symbols
+        selected = self._selected_symbols(symbols)
+        hot_symbols = load_hot_symbols(self.config)
         signals: list[OpportunitySignal] = []
         for symbol in selected:
             candles = self.client.get_klines(symbol, self.config.interval, self.config.lookback_limit)
@@ -39,6 +41,7 @@ class OpportunityScanner:
                     candles,
                     ticker,
                     open_interest,
+                    hot_symbols=hot_symbols,
                 )
             signals.append(self._choose_signal(baseline, lana_signal))
         return sorted(signals, key=lambda signal: signal.confidence, reverse=True)
@@ -164,3 +167,10 @@ class OpportunityScanner:
         if lana_signal.confidence > baseline.confidence:
             return lana_signal
         return baseline
+
+    def _selected_symbols(self, symbols: tuple[str, ...] | None) -> tuple[str, ...]:
+        selected = list(symbols or self.config.symbols)
+        for symbol in load_hot_symbols(self.config):
+            if symbol not in selected:
+                selected.append(symbol)
+        return tuple(selected)

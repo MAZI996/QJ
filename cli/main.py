@@ -1296,6 +1296,11 @@ def crypto_scan(
         "--hot-symbols",
         help="Comma-separated manually curated hot symbols for the Lana-inspired layer.",
     ),
+    hotlist: bool = typer.Option(
+        True,
+        "--hotlist/--no-hotlist",
+        help="Merge symbols from the local hotlist into the scan universe.",
+    ),
 ):
     """Scan Binance spot symbols and run the personal-account risk gate."""
 
@@ -1310,7 +1315,12 @@ def crypto_scan(
     config = CryptoTradingConfig.from_env()
     if interval:
         config = replace(config, interval=interval)
-    config = replace(config, execution_mode=mode, lana_strategy_enabled=lana)
+    config = replace(
+        config,
+        execution_mode=mode,
+        lana_strategy_enabled=lana,
+        hotlist_enabled=hotlist,
+    )
     if hot_symbols:
         config = replace(
             config,
@@ -1400,6 +1410,82 @@ def crypto_scan(
             )
         except CryptoLLMRouterNotReady as exc:
             console.print(f"[yellow]{exc}[/yellow]")
+
+
+@app.command("crypto-hotlist")
+def crypto_hotlist(
+    add: Optional[str] = typer.Option(
+        None,
+        "--add",
+        help="Comma-separated symbols to add, e.g. SOLUSDT,WIFUSDT.",
+    ),
+    source: str = typer.Option(
+        "manual",
+        "--source",
+        help="Where this hot signal came from, e.g. x, binance-square, forum.",
+    ),
+    reason: str = typer.Option(
+        "",
+        "--reason",
+        help="Short reason for the hot signal.",
+    ),
+    score: float = typer.Option(
+        1.0,
+        "--score",
+        help="Hotness score between 0 and 1.",
+    ),
+    ttl_hours: float = typer.Option(
+        24.0,
+        "--ttl-hours",
+        help="How long this signal stays active.",
+    ),
+    show_expired: bool = typer.Option(
+        False,
+        "--show-expired",
+        help="Show expired entries as well.",
+    ),
+):
+    """View or update the local hot-symbol list used by crypto scans."""
+
+    from tradingagents.crypto import CryptoTradingConfig
+    from tradingagents.crypto.hotlist import add_hot_symbol, filter_hotlist, load_hotlist
+
+    config = CryptoTradingConfig.from_env()
+    if add:
+        for symbol in [item.strip().upper() for item in add.split(",") if item.strip()]:
+            add_hot_symbol(
+                config.hotlist_path,
+                symbol=symbol,
+                source=source,
+                score=score,
+                reason=reason,
+                ttl_hours=ttl_hours,
+            )
+        console.print(f"[green]Hotlist updated:[/green] {config.hotlist_path}")
+
+    entries = filter_hotlist(
+        load_hotlist(config.hotlist_path),
+        max_age_hours=config.hotlist_max_age_hours,
+        min_score=config.hotlist_min_score,
+        include_expired=show_expired,
+    )
+    table = Table(title=f"Crypto Hotlist: {config.hotlist_path}", box=box.SIMPLE_HEAVY)
+    table.add_column("交易对", style="bold")
+    table.add_column("来源")
+    table.add_column("分数", justify="right")
+    table.add_column("观察时间")
+    table.add_column("过期时间")
+    table.add_column("原因")
+    for entry in entries:
+        table.add_row(
+            entry.symbol,
+            entry.source,
+            f"{entry.score:.2f}",
+            entry.observed_at,
+            entry.expires_at or "-",
+            entry.reason or "-",
+        )
+    console.print(table)
 
 
 @app.command("crypto-account")

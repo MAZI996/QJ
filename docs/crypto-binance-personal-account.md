@@ -30,6 +30,10 @@ TRADINGAGENTS_CRYPTO_MAX_POSITION_PCT=0.10
 TRADINGAGENTS_CRYPTO_MIN_CONFIDENCE=0.62
 TRADINGAGENTS_CRYPTO_LANA_STRATEGY_ENABLED=true
 TRADINGAGENTS_CRYPTO_LANA_HOT_SYMBOLS=BTCUSDT,ETHUSDT
+TRADINGAGENTS_CRYPTO_HOTLIST_ENABLED=true
+TRADINGAGENTS_CRYPTO_HOTLIST_PATH=C:\Users\you\.tradingagents\crypto\hotlist.json
+TRADINGAGENTS_CRYPTO_HOTLIST_MAX_AGE_HOURS=24
+TRADINGAGENTS_CRYPTO_HOTLIST_MIN_SCORE=0
 TRADINGAGENTS_CRYPTO_LANA_MIN_PRICE_CHANGE_PCT=3
 TRADINGAGENTS_CRYPTO_LANA_MAX_PRICE_CHANGE_PCT=18
 TRADINGAGENTS_CRYPTO_LANA_MIN_OI_CHANGE_PCT=8
@@ -73,10 +77,26 @@ TRADINGAGENTS_CRYPTO_EMERGENCY_STOP_FILE=C:\tradingagents-stop.txt
 
 这套策略不会承诺盈利，也不会绕过 `RiskManager`。如果 OI 数据拿不到，扫描不会中断，只会跳过可选 OI 过滤。
 
+## Hotlist 热度入口
+
+`crypto-hotlist` 是后续自动采集的统一入口。当前可以手动把 X、币安广场、论坛、社群里突然升温的币种写入本地文件：
+
+```powershell
+python -m cli.main crypto-hotlist --add SOLUSDT,WIFUSDT --source binance-square --reason "高流量帖子和发帖量上升"
+```
+
+默认文件是 `~/.tradingagents/crypto/hotlist.json`。`crypto-scan` 默认会把 hotlist 里的有效交易对合并进扫描范围，并作为 Lana-inspired 策略的热度信号。需要临时关闭时：
+
+```powershell
+python -m cli.main crypto-scan --symbols BTCUSDT,ETHUSDT --no-hotlist --mode analysis
+```
+
 ## 使用入口
 
 ```powershell
 python -m cli.main crypto-account
+python -m cli.main crypto-hotlist --add SOLUSDT --source x --reason "X 和币安广场讨论升温"
+python -m cli.main crypto-hotlist
 python -m cli.main crypto-scan --symbols BTCUSDT,ETHUSDT --mode analysis
 python -m cli.main crypto-scan --symbols BTCUSDT,ETHUSDT,SOLUSDT --hot-symbols SOLUSDT --mode analysis
 python -m cli.main crypto-scan --symbols BTCUSDT,ETHUSDT --mode analysis --ai-review

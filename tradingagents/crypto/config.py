@@ -67,6 +67,10 @@ class CryptoTradingConfig:
 
     lana_strategy_enabled: bool = True
     lana_hot_symbols: tuple[str, ...] = ()
+    hotlist_enabled: bool = True
+    hotlist_path: Path = Path.home() / ".tradingagents" / "crypto" / "hotlist.json"
+    hotlist_max_age_hours: float = 24.0
+    hotlist_min_score: float = 0.0
     lana_min_price_change_pct: float = 3.0
     lana_max_price_change_pct: float = 18.0
     lana_min_quote_volume_usdt: float = 20_000_000.0
@@ -132,6 +136,15 @@ class CryptoTradingConfig:
             min_order_notional_usdt=_float_env(prefix + "MIN_ORDER_NOTIONAL_USDT", 10.0),
             lana_strategy_enabled=_bool_env(prefix + "LANA_STRATEGY_ENABLED", True),
             lana_hot_symbols=_list_env(prefix + "LANA_HOT_SYMBOLS", ()),
+            hotlist_enabled=_bool_env(prefix + "HOTLIST_ENABLED", True),
+            hotlist_path=Path(
+                os.getenv(
+                    prefix + "HOTLIST_PATH",
+                    str(Path.home() / ".tradingagents" / "crypto" / "hotlist.json"),
+                )
+            ),
+            hotlist_max_age_hours=_float_env(prefix + "HOTLIST_MAX_AGE_HOURS", 24.0),
+            hotlist_min_score=_float_env(prefix + "HOTLIST_MIN_SCORE", 0.0),
             lana_min_price_change_pct=_float_env(prefix + "LANA_MIN_PRICE_CHANGE_PCT", 3.0),
             lana_max_price_change_pct=_float_env(prefix + "LANA_MAX_PRICE_CHANGE_PCT", 18.0),
             lana_min_quote_volume_usdt=_float_env(

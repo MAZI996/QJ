@@ -24,6 +24,7 @@ class LanaInspiredStrategy:
         candles: list[Candle],
         ticker: TickerSnapshot,
         open_interest: list[OpenInterestPoint],
+        hot_symbols: tuple[str, ...] | None = None,
     ) -> OpportunitySignal | None:
         if not self.config.lana_strategy_enabled or len(candles) < 30:
             return None
@@ -36,13 +37,13 @@ class LanaInspiredStrategy:
         atr_value = atr(candles, 14) or 0.0
         atr_pct = atr_value / last if last else 0.0
         oi_change_pct = self._oi_change_pct(open_interest)
-        hot_symbols = set(self.config.lana_hot_symbols)
+        hot_symbol_set = set(hot_symbols or self.config.lana_hot_symbols)
 
         score = 0.0
         reasons: list[str] = []
 
-        if hot_symbols:
-            if symbol.upper() in hot_symbols:
+        if hot_symbol_set:
+            if symbol.upper() in hot_symbol_set:
                 score += 0.18
                 reasons.append("进入人工/舆情热度名单，允许继续追踪")
             else:

@@ -27,6 +27,7 @@ crypto 扩展沿用这个链路，但数据和约束换成：
 
 - `tradingagents/crypto/binance_client.py`：Binance Spot REST、余额、交易规则、订单接口。
 - `tradingagents/crypto/scanner.py`：规则优先的机会扫描。
+- `tradingagents/crypto/hotlist.py`：本地热度名单入口，未来 X、币安广场、论坛采集都写入这里。
 - `tradingagents/crypto/lana_strategy.py`：参考 Lana X 动态后的热度、涨幅/波动、固定止损候选层，OI 是我们额外加入的可选增强过滤。
 - `tradingagents/crypto/risk.py`：个人账户硬风控。
 - `tradingagents/crypto/execution.py`：`analysis/paper/testnet/live` 执行路由。
