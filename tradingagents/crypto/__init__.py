@@ -6,6 +6,7 @@ order path is enabled.
 """
 
 from .config import CryptoTradingConfig
+from .autopilot import AutoPilotCycleResult, CryptoAutoPilot, CryptoAutoPilotSafetyError
 from .decision_journal import DecisionJournalWrite, write_workflow_report
 from .engine import CryptoTradingEngine
 from .models import OpportunitySignal, OrderIntent, RiskDecision
@@ -18,6 +19,9 @@ __all__ = [
     "CryptoTradingAgentsWorkflow",
     "CryptoWorkflowReport",
     "DecisionJournalWrite",
+    "AutoPilotCycleResult",
+    "CryptoAutoPilot",
+    "CryptoAutoPilotSafetyError",
     "HIGH_STAR_STRATEGY_REFERENCES",
     "OpportunitySignal",
     "OrderIntent",

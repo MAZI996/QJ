@@ -111,6 +111,8 @@ python -m cli.main crypto-hotlist
 python -m cli.main crypto-scan --symbols BTCUSDT,ETHUSDT --mode analysis
 python -m cli.main crypto-scan --symbols BTCUSDT,ETHUSDT,SOLUSDT --hot-symbols SOLUSDT --mode analysis
 python -m cli.main crypto-scan --symbols BTCUSDT,ETHUSDT --mode analysis --ai-review
+python -m cli.main crypto-autopilot --symbols BTCUSDT,ETHUSDT,SOLUSDT --mode analysis
+python -m cli.main crypto-autopilot --symbols BTCUSDT,ETHUSDT --mode paper --execute-top --cycles 0 --interval-seconds 300
 python -m cli.main crypto-scan --symbols BTCUSDT,ETHUSDT --mode paper --execute-top
 python -m cli.main crypto-scan --symbols BTCUSDT --mode testnet --execute-top
 ```

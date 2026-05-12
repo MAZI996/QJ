@@ -1633,6 +1633,145 @@ def crypto_hotlist(
     console.print(table)
 
 
+@app.command("crypto-autopilot")
+def crypto_autopilot(
+    symbols: Optional[str] = typer.Option(
+        None,
+        "--symbols",
+        help="Comma-separated Binance spot symbols, e.g. BTCUSDT,ETHUSDT.",
+    ),
+    interval: Optional[str] = typer.Option(
+        None,
+        "--interval",
+        help="Binance kline interval, e.g. 5m, 15m, 1h.",
+    ),
+    interval_seconds: int = typer.Option(
+        300,
+        "--interval-seconds",
+        help="Seconds to wait between autopilot cycles.",
+    ),
+    cycles: int = typer.Option(
+        1,
+        "--cycles",
+        help="Number of cycles to run. Use 0 for an endless service loop.",
+    ),
+    mode: str = typer.Option(
+        "analysis",
+        "--mode",
+        help="Execution mode: analysis, paper, testnet, or live.",
+    ),
+    execute_top: bool = typer.Option(
+        False,
+        "--execute-top",
+        help="Execute only the top risk-approved signal each cycle.",
+    ),
+    allow_live: bool = typer.Option(
+        False,
+        "--allow-live",
+        help="Extra live-mode guard for unattended autopilot runs.",
+    ),
+    live_confirm: str = typer.Option(
+        "",
+        "--live-confirm",
+        help="Required confirmation phrase for real Binance live orders.",
+    ),
+    ai_review: bool = typer.Option(
+        False,
+        "--ai-review",
+        help="Ask the configured LLM/Hermes route to review each cycle.",
+    ),
+    lana: bool = typer.Option(
+        True,
+        "--lana/--no-lana",
+        help="Enable or disable the Lana-inspired attention/OI strategy layer.",
+    ),
+    hotlist: bool = typer.Option(
+        True,
+        "--hotlist/--no-hotlist",
+        help="Merge symbols from the local hotlist into the scan universe.",
+    ),
+    fusion: bool = typer.Option(
+        True,
+        "--fusion/--no-fusion",
+        help="Enable or disable the high-star strategy fusion layer.",
+    ),
+    journal_dir: Optional[Path] = typer.Option(
+        None,
+        "--journal-dir",
+        help="Directory for decision_journal.jsonl and workflow report files.",
+    ),
+):
+    """Run repeated crypto workflow cycles for unattended automation."""
+
+    from dataclasses import replace
+
+    from tradingagents.crypto import (
+        CryptoAutoPilot,
+        CryptoAutoPilotSafetyError,
+        CryptoTradingConfig,
+    )
+
+    valid_modes = {"analysis", "paper", "testnet", "live"}
+    if mode not in valid_modes:
+        raise typer.BadParameter(f"mode must be one of: {', '.join(sorted(valid_modes))}")
+    if interval_seconds < 1:
+        raise typer.BadParameter("interval-seconds must be at least 1.")
+    if cycles < 0:
+        raise typer.BadParameter("cycles must be 0 or a positive integer.")
+
+    config = CryptoTradingConfig.from_env()
+    if interval:
+        config = replace(config, interval=interval)
+    config = replace(
+        config,
+        execution_mode=mode,
+        lana_strategy_enabled=lana,
+        hotlist_enabled=hotlist,
+        strategy_fusion_enabled=fusion,
+    )
+    selected_symbols = None
+    if symbols:
+        selected_symbols = tuple(
+            item.strip().upper() for item in symbols.split(",") if item.strip()
+        )
+
+    console.print(
+        Panel(
+            (
+                f"mode={mode} | cycles={cycles} | interval={interval_seconds}s | "
+                f"execute_top={execute_top} | ai_review={ai_review}"
+            ),
+            title="Crypto Autopilot",
+            border_style="green",
+        )
+    )
+    try:
+        runner = CryptoAutoPilot(config)
+        for result in runner.run_loop(
+            symbols=selected_symbols,
+            interval_seconds=interval_seconds,
+            cycles=cycles,
+            execution_mode=mode,  # type: ignore[arg-type]
+            execute_top=execute_top,
+            live_confirmation=live_confirm,
+            ai_review_enabled=ai_review,
+            journal_dir=journal_dir,
+            allow_live=allow_live,
+        ):
+            console.print(
+                f"[bold]Cycle {result.cycle}[/bold] action={result.final_action} "
+                f"top={result.top_symbol} stopped={result.stopped}"
+            )
+            console.print(f"[dim]{result.execution_message}[/dim]")
+            if result.saved:
+                console.print(f"[green]Journal:[/green] {result.saved.jsonl_path}")
+                console.print(f"[dim]Report:[/dim] {result.saved.markdown_path}")
+            if result.stopped:
+                console.print(f"[yellow]{result.reason}[/yellow]")
+    except CryptoAutoPilotSafetyError as exc:
+        raise typer.BadParameter(str(exc)) from exc
+
+
 @app.command("crypto-attention-ingest")
 def crypto_attention_ingest(
     text: Optional[str] = typer.Option(
