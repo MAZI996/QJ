@@ -15,6 +15,9 @@ $env:TRADINGAGENTS_CRYPTO_HYPERLIQUID_TESTNET="true"
 $env:TRADINGAGENTS_CRYPTO_HYPERLIQUID_WALLET_ADDRESS="0xYourMainWallet"
 $env:TRADINGAGENTS_CRYPTO_HYPERLIQUID_API_WALLET_ADDRESS="0xYourApiWallet"
 $env:TRADINGAGENTS_CRYPTO_HYPERLIQUID_MAX_LEVERAGE="1"
+$env:TRADINGAGENTS_CRYPTO_HYPERLIQUID_SDK_EXECUTION_ENABLED="false"
+$env:TRADINGAGENTS_CRYPTO_HYPERLIQUID_MARKET_SLIPPAGE="0.01"
+$env:TRADINGAGENTS_CRYPTO_HYPERLIQUID_REQUIRE_PROTECTIVE_ORDERS="true"
 $env:TRADINGAGENTS_CRYPTO_ENABLE_LIVE_ORDERS="false"
 $env:TRADINGAGENTS_CRYPTO_LIVE_CONFIRM_PHRASE="I_UNDERSTAND_THIS_PLACES_REAL_HYPERLIQUID_ORDERS"
 ```
@@ -39,19 +42,43 @@ The scan path now includes the Hyperliquid market-quality gate by default:
 spread, top-book depth, order-book imbalance, and funding are checked before
 risk sizing. See `docs/crypto-market-quality.md`.
 
-## Live Signing Boundary
+## Official SDK Execution Boundary
 
 Hyperliquid order placement uses the official signed `/exchange` flow. We do
-not hand-roll live signatures in this repository. Live trading should use the
-official `hyperliquid-python-sdk` adapter once keys and paper/testnet behavior
-are verified:
+not hand-roll live signatures in this repository. The SDK execution adapter is
+present but disabled by default:
 
 ```bash
 pip install hyperliquid-python-sdk
 ```
 
-Until that adapter is enabled, the execution router blocks Hyperliquid
-`testnet/live` execution and allows only `analysis` and `paper` modes.
+Server-only execution env:
+
+```powershell
+$env:TRADINGAGENTS_CRYPTO_HYPERLIQUID_WALLET_ADDRESS="0xYourMainWallet"
+$env:TRADINGAGENTS_CRYPTO_HYPERLIQUID_API_WALLET_ADDRESS="0xYourApiWallet"
+$env:TRADINGAGENTS_CRYPTO_HYPERLIQUID_PRIVATE_KEY="0xApiWalletPrivateKey"
+$env:TRADINGAGENTS_CRYPTO_HYPERLIQUID_SDK_EXECUTION_ENABLED="true"
+```
+
+Testnet execution still requires `--execute-top`:
+
+```powershell
+python -m cli.main crypto-scan --symbols BTC --mode testnet --execute-top
+```
+
+Live execution requires all of these at the same time:
+
+- `TRADINGAGENTS_CRYPTO_HYPERLIQUID_TESTNET=false`
+- `TRADINGAGENTS_CRYPTO_HYPERLIQUID_SDK_EXECUTION_ENABLED=true`
+- `TRADINGAGENTS_CRYPTO_ENABLE_LIVE_ORDERS=true`
+- `TRADINGAGENTS_CRYPTO_PROTECTIVE_OCO_ENABLED=true`
+- `--mode live --execute-top`
+- `--live-confirm I_UNDERSTAND_THIS_PLACES_REAL_HYPERLIQUID_ORDERS`
+
+If protective orders are required, the adapter submits a grouped Hyperliquid
+entry plus reduce-only take-profit and stop-loss triggers using the official
+SDK `bulk_orders(..., grouping="normalTpsl")` path.
 
 ## Server Layout
 

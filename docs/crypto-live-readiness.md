@@ -18,14 +18,17 @@ python -m cli.main crypto-positions
 
 ## 3. Stop/Take-Profit Protection
 
-Implemented in `tradingagents/crypto/protective_orders.py` and wired into
+Implemented in `tradingagents/crypto/protective_orders.py`,
+`tradingagents/crypto/hyperliquid_execution.py`, and wired into
 `ExecutionRouter`.
 
 - Current protective sell plans are legacy Binance Spot OCO-style params.
-- Hyperliquid protective orders need the official signed adapter before live use.
+- Hyperliquid execution can submit grouped entry + reduce-only TP/SL trigger
+  orders through the official SDK when protective orders are enabled.
 - Legacy live OCO submission is gated behind
   `TRADINGAGENTS_CRYPTO_PROTECTIVE_OCO_ENABLED=true`.
-- The default remains disabled until live order behavior is verified.
+- SDK execution remains disabled until server keys, paper behavior, and testnet
+  behavior are verified.
 
 ```powershell
 python -m cli.main crypto-protective-plan
@@ -110,6 +113,8 @@ $env:TRADINGAGENTS_CRYPTO_DAILY_LOSS_LIMIT_USDT="3"
 $env:TRADINGAGENTS_CRYPTO_MAX_POSITION_PCT="0.10"
 $env:TRADINGAGENTS_CRYPTO_EXCHANGE_PROVIDER="hyperliquid"
 $env:TRADINGAGENTS_CRYPTO_HYPERLIQUID_MAX_LEVERAGE="1"
+$env:TRADINGAGENTS_CRYPTO_HYPERLIQUID_SDK_EXECUTION_ENABLED="false"
+$env:TRADINGAGENTS_CRYPTO_HYPERLIQUID_REQUIRE_PROTECTIVE_ORDERS="true"
 $env:TRADINGAGENTS_CRYPTO_PROTECTIVE_OCO_ENABLED="false"
 $env:TRADINGAGENTS_CRYPTO_EMERGENCY_STOP_FILE="C:\tradingagents-stop.txt"
 ```

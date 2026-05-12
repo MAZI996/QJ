@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from .config import CryptoTradingConfig
+from .hyperliquid_execution import HyperliquidExecutionAdapter
 from .models import ExecutionMode, OrderIntent, OrderResult
 from .paper import PaperBroker
 from .positions import PositionStore
@@ -15,6 +16,7 @@ class ExecutionRouter:
         self.config = config
         self.paper = PaperBroker(config)
         self.positions = PositionStore.from_state_dir(config.state_dir)
+        self.hyperliquid_execution = HyperliquidExecutionAdapter(config)
 
     def execute(
         self,
@@ -45,13 +47,14 @@ class ExecutionRouter:
             return result
 
         if self.config.exchange_provider.strip().lower() == "hyperliquid":
-            return self._blocked(
+            result = self.hyperliquid_execution.execute(
                 intent,
-                (
-                    "Hyperliquid live/testnet execution requires the official "
-                    "hyperliquid-python-sdk adapter; current router is analysis/paper only."
-                ),
+                selected_mode,
+                live_confirmation=live_confirmation,
             )
+            if selected_mode == "live" and result.accepted:
+                self.positions.apply_order_result(intent, result)
+            return result
 
         if selected_mode == "testnet":
             payload = self.client.test_market_order(intent.symbol, intent.side, intent.quantity)

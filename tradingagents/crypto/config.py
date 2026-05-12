@@ -59,6 +59,9 @@ class CryptoTradingConfig:
     hyperliquid_api_wallet_address: str = ""
     hyperliquid_private_key: str = ""
     hyperliquid_max_leverage: int = 1
+    hyperliquid_sdk_execution_enabled: bool = False
+    hyperliquid_market_slippage: float = 0.01
+    hyperliquid_require_protective_orders: bool = True
 
     symbols: tuple[str, ...] = ("BTC", "ETH", "SOL", "HYPE")
     interval: str = "15m"
@@ -161,6 +164,18 @@ class CryptoTradingConfig:
             ),
             hyperliquid_private_key=os.getenv(prefix + "HYPERLIQUID_PRIVATE_KEY", ""),
             hyperliquid_max_leverage=_int_env(prefix + "HYPERLIQUID_MAX_LEVERAGE", 1),
+            hyperliquid_sdk_execution_enabled=_bool_env(
+                prefix + "HYPERLIQUID_SDK_EXECUTION_ENABLED",
+                False,
+            ),
+            hyperliquid_market_slippage=_float_env(
+                prefix + "HYPERLIQUID_MARKET_SLIPPAGE",
+                0.01,
+            ),
+            hyperliquid_require_protective_orders=_bool_env(
+                prefix + "HYPERLIQUID_REQUIRE_PROTECTIVE_ORDERS",
+                True,
+            ),
             symbols=_list_env(prefix + "SYMBOLS", ("BTC", "ETH", "SOL", "HYPE")),
             interval=os.getenv(prefix + "INTERVAL", "15m"),
             lookback_limit=_int_env(prefix + "LOOKBACK_LIMIT", 120),

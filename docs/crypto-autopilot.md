@@ -41,12 +41,14 @@ Live mode still will not submit orders unless:
 
 - `TRADINGAGENTS_CRYPTO_HYPERLIQUID_TESTNET=false`
 - `TRADINGAGENTS_CRYPTO_HYPERLIQUID_MAX_LEVERAGE=1`
+- `TRADINGAGENTS_CRYPTO_HYPERLIQUID_SDK_EXECUTION_ENABLED=true`
+- `TRADINGAGENTS_CRYPTO_PROTECTIVE_OCO_ENABLED=true`
 - `TRADINGAGENTS_CRYPTO_ENABLE_LIVE_ORDERS=true`
 - `--allow-live` is present
 - `--live-confirm` matches `TRADINGAGENTS_CRYPTO_LIVE_CONFIRM_PHRASE`
 - `RiskManager` approves the order intent
 - no emergency stop file exists
-- the official Hyperliquid signing adapter is installed and enabled
+- the official Hyperliquid SDK is installed and signer config passes diagnostics
 
 For a 100 USDT starting account, set risk controls before any live run:
 

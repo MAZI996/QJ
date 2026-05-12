@@ -25,9 +25,9 @@ The command is safe by default:
 - `--ai-review` is advisory only.
 - `--save-report` is enabled by default and writes a local decision journal.
 - `--fusion` is enabled by default and applies conservative multi-strategy scoring before risk.
-- Real Hyperliquid execution still requires the execution router, the official
-  signing adapter, the deterministic risk gate, live mode, live config, and the
-  explicit live confirmation phrase.
+- Real Hyperliquid execution still requires the execution router, official SDK
+  execution enabled, the deterministic risk gate, protective orders, live mode,
+  live config, and the explicit live confirmation phrase.
 
 Decision logs are written under `TRADINGAGENTS_CRYPTO_STATE_DIR`, defaulting to
 `~/.tradingagents/crypto`:

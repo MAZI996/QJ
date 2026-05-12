@@ -20,6 +20,11 @@ from .hyperliquid_client import (
     HyperliquidOrderBook,
 )
 from .hyperliquid_diagnostics import HyperliquidDiagnosticReport, HyperliquidDiagnostics
+from .hyperliquid_execution import (
+    HyperliquidExecutionAdapter,
+    HyperliquidExecutionError,
+    HyperliquidSignerStatus,
+)
 from .market_quality import MarketQualityDecision, MarketQualityGate
 from .models import OpportunitySignal, OrderIntent, RiskDecision
 from .order_recovery import OrderRecoveryResult, OrderRecoveryService
@@ -50,8 +55,11 @@ __all__ = [
     "HyperliquidClient",
     "HyperliquidDiagnosticReport",
     "HyperliquidDiagnostics",
+    "HyperliquidExecutionAdapter",
+    "HyperliquidExecutionError",
     "HyperliquidMarket",
     "HyperliquidOrderBook",
+    "HyperliquidSignerStatus",
     "MarketQualityDecision",
     "MarketQualityGate",
     "OpportunitySignal",

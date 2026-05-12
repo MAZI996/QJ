@@ -261,7 +261,7 @@ class CryptoTradingAgentsWorkflow:
                 detail = "; ".join(item.risk.rejected_rules)
             lines.append(f"- {item.signal.symbol}: {status} - {detail}")
         lines.append(
-            "Live Hyperliquid orders remain disabled unless live mode, official signing adapter, and explicit confirmation are set."
+            "Live Hyperliquid orders require SDK execution enabled, protective orders, live mode, and explicit confirmation."
         )
         return "\n".join(lines)
 

@@ -8,6 +8,7 @@ from typing import Any, Literal
 
 from .config import CryptoTradingConfig
 from .hyperliquid_client import HyperliquidAPIError, HyperliquidClient
+from .hyperliquid_execution import HyperliquidExecutionAdapter
 
 
 DiagnosticStatus = Literal["PASS", "WARN", "FAIL", "SKIP"]
@@ -49,6 +50,7 @@ class HyperliquidDiagnostics:
         coin = HyperliquidClient.normalize_symbol(symbol)
         steps = [
             self._check_sdk(),
+            self._check_execution_config(),
             self._check_meta(),
             self._check_all_mids(coin),
             self._check_l2_book(coin),
@@ -77,6 +79,58 @@ class HyperliquidDiagnostics:
             "python_sdk",
             "PASS",
             "hyperliquid-python-sdk is installed.",
+        )
+
+    def _check_execution_config(self) -> HyperliquidDiagnosticStep:
+        status = HyperliquidExecutionAdapter(self.config).signer_status()
+        details = {
+            "sdk_enabled": status.sdk_enabled,
+            "private_key": status.private_key_present,
+            "wallet_address": status.wallet_address_present,
+            "api_wallet_address": status.api_wallet_address_present,
+            "signer_address": status.signer_address,
+        }
+        if not status.sdk_enabled:
+            return HyperliquidDiagnosticStep(
+                "sdk_execution_config",
+                "SKIP",
+                "SDK execution is disabled by default.",
+                details,
+            )
+        if not status.sdk_available:
+            return HyperliquidDiagnosticStep(
+                "sdk_execution_config",
+                "FAIL",
+                status.reason or "hyperliquid-python-sdk is not installed.",
+                details,
+            )
+        if not status.private_key_present or not status.wallet_address_present:
+            return HyperliquidDiagnosticStep(
+                "sdk_execution_config",
+                "FAIL",
+                "SDK execution requires wallet address and private key env vars.",
+                details,
+            )
+        if status.reason:
+            return HyperliquidDiagnosticStep(
+                "sdk_execution_config",
+                "FAIL",
+                status.reason,
+                details,
+            )
+        expected = self.config.hyperliquid_api_wallet_address.lower()
+        if expected and status.signer_address.lower() != expected:
+            return HyperliquidDiagnosticStep(
+                "sdk_execution_config",
+                "FAIL",
+                "API wallet address does not match the private key signer.",
+                details,
+            )
+        return HyperliquidDiagnosticStep(
+            "sdk_execution_config",
+            "PASS",
+            "SDK execution config is internally consistent.",
+            details,
         )
 
     def _check_meta(self) -> HyperliquidDiagnosticStep:
