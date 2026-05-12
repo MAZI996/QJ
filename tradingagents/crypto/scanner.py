@@ -1,8 +1,7 @@
-"""Rule-first opportunity scanner for Binance spot symbols."""
+"""Rule-first opportunity scanner for crypto symbols."""
 
 from __future__ import annotations
 
-from .binance_client import BinanceAPIError, BinanceClient
 from .config import CryptoTradingConfig
 from .hotlist import load_hot_symbols
 from .indicators import atr, ema, rsi, sma
@@ -11,9 +10,9 @@ from .models import Candle, OpportunitySignal, TickerSnapshot
 
 
 class OpportunityScanner:
-    """Find spot long candidates before any AI or execution layer is involved."""
+    """Find long candidates before any AI or execution layer is involved."""
 
-    def __init__(self, client: BinanceClient, config: CryptoTradingConfig):
+    def __init__(self, client, config: CryptoTradingConfig):
         self.client = client
         self.config = config
         self.lana_strategy = LanaInspiredStrategy(config)
@@ -34,7 +33,7 @@ class OpportunityScanner:
                         self.config.lana_oi_lookback,
                         self.config.lana_oi_limit,
                     )
-                except BinanceAPIError:
+                except Exception:
                     open_interest = []
                 lana_signal = self.lana_strategy.evaluate(
                     symbol,

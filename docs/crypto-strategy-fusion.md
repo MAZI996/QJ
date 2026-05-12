@@ -2,7 +2,7 @@
 
 This project will not copy strategy code from external repositories. The
 fusion layer adopts useful ideas and keeps all live authority inside our own
-Binance spot, Hermes, TradingAgents, and risk-control boundaries.
+Hyperliquid trading-center, Hermes, TradingAgents, and risk-control boundaries.
 
 Snapshot date: 2026-05-12. Stars are a live GitHub API snapshot and will drift.
 
@@ -10,7 +10,7 @@ Snapshot date: 2026-05-12. Stars are a live GitHub API snapshot and will drift.
 | --- | ---: | --- |
 | [freqtrade/freqtrade](https://github.com/freqtrade/freqtrade) | 50222 | Crypto bot lifecycle, dry-run/live split, dynamic whitelist, backtest-first discipline. |
 | [microsoft/qlib](https://github.com/microsoft/qlib) | 42664 | AI quant research process, factor mining, production separation. |
-| [ccxt/ccxt](https://github.com/ccxt/ccxt) | 42403 | Future multi-exchange abstraction. Binance remains first venue. |
+| [ccxt/ccxt](https://github.com/ccxt/ccxt) | 42403 | Future multi-exchange abstraction. Hyperliquid is now the primary venue. |
 | [mementum/backtrader](https://github.com/mementum/backtrader) | 21511 | Backtesting discipline and analyzers. |
 | [QuantConnect/Lean](https://github.com/QuantConnect/Lean) | 18928 | Algorithm engine structure, brokerage separation, research/live boundaries. |
 | [hummingbot/hummingbot](https://github.com/hummingbot/hummingbot) | 18529 | Liquidity, spread, and execution-quality filters. |
@@ -43,4 +43,4 @@ python -m cli.main crypto-scan --symbols BTCUSDT,SOLUSDT --mode paper --fusion
 
 Important boundary: a small account can compound only if loss control survives.
 The fusion layer never promises profit and never bypasses deterministic risk,
-execution mode, live order config, or the explicit Binance live confirmation.
+execution mode, live order config, or explicit live confirmation.

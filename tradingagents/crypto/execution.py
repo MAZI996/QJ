@@ -45,6 +45,15 @@ class ExecutionRouter:
             self.positions.apply_order_result(intent, result)
             return result
 
+        if self.config.exchange_provider.strip().lower() == "hyperliquid":
+            return self._blocked(
+                intent,
+                (
+                    "Hyperliquid live/testnet execution requires the official "
+                    "hyperliquid-python-sdk adapter; current router is analysis/paper only."
+                ),
+            )
+
         if selected_mode == "testnet":
             payload = self.client.test_market_order(intent.symbol, intent.side, intent.quantity)
             return OrderResult(

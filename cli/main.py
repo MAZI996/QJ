@@ -2142,6 +2142,165 @@ def crypto_binance_check(
     console.print(table)
 
 
+@app.command("crypto-hyperliquid-check")
+def crypto_hyperliquid_check(
+    symbol: str = typer.Option(
+        "BTC",
+        "--symbol",
+        help="Hyperliquid coin to validate, e.g. BTC, ETH, SOL, HYPE.",
+    ),
+    mainnet: bool = typer.Option(
+        False,
+        "--mainnet",
+        help="Use https://api.hyperliquid.xyz instead of the default testnet URL.",
+    ),
+    wallet_address: Optional[str] = typer.Option(
+        None,
+        "--wallet-address",
+        help="Optional Hyperliquid user wallet address for clearinghouseState.",
+    ),
+):
+    """Run safe Hyperliquid trading-center diagnostics."""
+
+    from dataclasses import replace
+
+    from tradingagents.crypto import CryptoTradingConfig, HyperliquidDiagnostics
+
+    config = CryptoTradingConfig.from_env()
+    config = replace(config, exchange_provider="hyperliquid")
+    if mainnet:
+        config = replace(config, hyperliquid_testnet=False)
+    if wallet_address:
+        config = replace(config, hyperliquid_wallet_address=wallet_address)
+
+    report = HyperliquidDiagnostics(config).run(symbol=symbol)
+    color = "green" if report.ok else "red"
+    console.print(
+        Panel(
+            (
+                f"base={report.base_url} | testnet={report.testnet} | "
+                f"wallet={report.wallet_address_present} | "
+                f"api_wallet={report.api_wallet_present} | "
+                f"private_key={report.private_key_present}"
+            ),
+            title="Hyperliquid Diagnostics",
+            border_style=color,
+        )
+    )
+    table = Table(title=f"Hyperliquid Check: {report.symbol}", box=box.SIMPLE_HEAVY)
+    table.add_column("Step", style="bold")
+    table.add_column("Status")
+    table.add_column("Message")
+    table.add_column("Details")
+    for step in report.steps:
+        status_style = {
+            "PASS": "green",
+            "WARN": "yellow",
+            "FAIL": "red",
+            "SKIP": "dim",
+        }.get(step.status, "white")
+        detail = ", ".join(f"{key}={value}" for key, value in step.details.items())
+        table.add_row(
+            step.name,
+            f"[{status_style}]{step.status}[/{status_style}]",
+            step.message,
+            detail,
+        )
+    console.print(table)
+
+
+@app.command("crypto-hyperliquid-markets")
+def crypto_hyperliquid_markets(
+    mainnet: bool = typer.Option(
+        False,
+        "--mainnet",
+        help="Use https://api.hyperliquid.xyz instead of the default testnet URL.",
+    ),
+    limit: int = typer.Option(
+        25,
+        "--limit",
+        help="Maximum markets to show.",
+    ),
+):
+    """Show Hyperliquid market metadata."""
+
+    from dataclasses import replace
+
+    from tradingagents.crypto import CryptoTradingConfig, HyperliquidClient
+
+    config = replace(CryptoTradingConfig.from_env(), exchange_provider="hyperliquid")
+    if mainnet:
+        config = replace(config, hyperliquid_testnet=False)
+    markets = HyperliquidClient(config).get_markets()
+    table = Table(title=f"Hyperliquid Markets: {config.resolved_hyperliquid_base_url}")
+    table.add_column("Coin", style="bold")
+    table.add_column("Size Decimals", justify="right")
+    table.add_column("Max Leverage", justify="right")
+    table.add_column("Only Isolated")
+    for market in markets[:limit]:
+        table.add_row(
+            market.name,
+            str(market.sz_decimals),
+            str(market.max_leverage),
+            "yes" if market.only_isolated else "no",
+        )
+    console.print(table)
+
+
+@app.command("crypto-hyperliquid-account")
+def crypto_hyperliquid_account(
+    wallet_address: Optional[str] = typer.Option(
+        None,
+        "--wallet-address",
+        help="Hyperliquid user wallet address. Falls back to env config.",
+    ),
+    mainnet: bool = typer.Option(
+        False,
+        "--mainnet",
+        help="Use https://api.hyperliquid.xyz instead of the default testnet URL.",
+    ),
+):
+    """Show Hyperliquid clearinghouse account state."""
+
+    from dataclasses import replace
+
+    from tradingagents.crypto import CryptoTradingConfig, HyperliquidClient
+
+    config = replace(CryptoTradingConfig.from_env(), exchange_provider="hyperliquid")
+    if mainnet:
+        config = replace(config, hyperliquid_testnet=False)
+    if wallet_address:
+        config = replace(config, hyperliquid_wallet_address=wallet_address)
+    client = HyperliquidClient(config)
+    state = client.get_user_state()
+    margin = state.get("marginSummary", {})
+    console.print(
+        Panel(
+            (
+                f"account_value={margin.get('accountValue', '0')} | "
+                f"margin_used={margin.get('totalMarginUsed', '0')} | "
+                f"withdrawable={state.get('withdrawable', '0')}"
+            ),
+            title="Hyperliquid Account",
+            border_style="cyan",
+        )
+    )
+    table = Table(title="Open Positions", box=box.SIMPLE_HEAVY)
+    table.add_column("Coin", style="bold")
+    table.add_column("Size", justify="right")
+    table.add_column("Entry", justify="right")
+    table.add_column("Unrealized PnL", justify="right")
+    for item in state.get("assetPositions", []):
+        position = item.get("position", {})
+        table.add_row(
+            str(position.get("coin", "")),
+            str(position.get("szi", "")),
+            str(position.get("entryPx", "")),
+            str(position.get("unrealizedPnl", "")),
+        )
+    console.print(table)
+
+
 @app.command("crypto-base")
 def crypto_base():
     """Show the TradingAgents base-layer contract for this crypto extension."""

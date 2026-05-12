@@ -1,6 +1,8 @@
 # 在 TradingAgents 基础上扩展 crypto 自动交易
 
-本项目不是另起一个交易机器人，而是在 `TauricResearch/TradingAgents` 的基础上增加 Binance 个人账户、Hermes 大模型路由和自动交易风控层。TradingAgents 是底层框架，不是一次性参考资料。
+本项目不是另起一个交易机器人，而是在 `TauricResearch/TradingAgents` 的基础上增加 Hyperliquid 交易中心、Hermes 大模型路由和自动交易风控层。TradingAgents 是底层框架，不是一次性参考资料。
+
+> 2026-05-12 更新：默认交易中心切换为 Hyperliquid。Binance 代码保留为旧适配器参考，不再作为主交易所路线。
 
 ## 上游关系
 

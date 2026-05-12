@@ -1,4 +1,4 @@
-"""Configuration for the Binance crypto trading workflow."""
+"""Configuration for the crypto trading workflow."""
 
 from __future__ import annotations
 
@@ -48,12 +48,19 @@ class CryptoTradingConfig:
 
     api_key: str = ""
     api_secret: str = ""
+    exchange_provider: str = "hyperliquid"
     testnet: bool = True
     base_url: str | None = None
     futures_base_url: str | None = None
     recv_window_ms: int = 5000
+    hyperliquid_base_url: str | None = None
+    hyperliquid_testnet: bool = True
+    hyperliquid_wallet_address: str = ""
+    hyperliquid_api_wallet_address: str = ""
+    hyperliquid_private_key: str = ""
+    hyperliquid_max_leverage: int = 1
 
-    symbols: tuple[str, ...] = ("BTCUSDT", "ETHUSDT", "BNBUSDT", "SOLUSDT")
+    symbols: tuple[str, ...] = ("BTC", "ETH", "SOL", "HYPE")
     interval: str = "15m"
     lookback_limit: int = 120
 
@@ -117,6 +124,14 @@ class CryptoTradingConfig:
             return "https://testnet.binancefuture.com"
         return "https://fapi.binance.com"
 
+    @property
+    def resolved_hyperliquid_base_url(self) -> str:
+        if self.hyperliquid_base_url:
+            return self.hyperliquid_base_url.rstrip("/")
+        if self.hyperliquid_testnet:
+            return "https://api.hyperliquid-testnet.xyz"
+        return "https://api.hyperliquid.xyz"
+
     @classmethod
     def from_env(cls) -> "CryptoTradingConfig":
         prefix = "TRADINGAGENTS_CRYPTO_"
@@ -126,11 +141,21 @@ class CryptoTradingConfig:
                 "BINANCE_API_SECRET",
                 os.getenv(prefix + "BINANCE_API_SECRET", ""),
             ),
+            exchange_provider=os.getenv(prefix + "EXCHANGE_PROVIDER", "hyperliquid"),
             testnet=_bool_env(prefix + "BINANCE_TESTNET", True),
             base_url=os.getenv(prefix + "BINANCE_BASE_URL") or None,
             futures_base_url=os.getenv(prefix + "BINANCE_FUTURES_BASE_URL") or None,
             recv_window_ms=_int_env(prefix + "BINANCE_RECV_WINDOW_MS", 5000),
-            symbols=_list_env(prefix + "SYMBOLS", ("BTCUSDT", "ETHUSDT", "BNBUSDT", "SOLUSDT")),
+            hyperliquid_base_url=os.getenv(prefix + "HYPERLIQUID_BASE_URL") or None,
+            hyperliquid_testnet=_bool_env(prefix + "HYPERLIQUID_TESTNET", True),
+            hyperliquid_wallet_address=os.getenv(prefix + "HYPERLIQUID_WALLET_ADDRESS", ""),
+            hyperliquid_api_wallet_address=os.getenv(
+                prefix + "HYPERLIQUID_API_WALLET_ADDRESS",
+                "",
+            ),
+            hyperliquid_private_key=os.getenv(prefix + "HYPERLIQUID_PRIVATE_KEY", ""),
+            hyperliquid_max_leverage=_int_env(prefix + "HYPERLIQUID_MAX_LEVERAGE", 1),
+            symbols=_list_env(prefix + "SYMBOLS", ("BTC", "ETH", "SOL", "HYPE")),
             interval=os.getenv(prefix + "INTERVAL", "15m"),
             lookback_limit=_int_env(prefix + "LOOKBACK_LIMIT", 120),
             account_equity_usdt=_float_env(prefix + "ACCOUNT_EQUITY_USDT", 10_000.0),

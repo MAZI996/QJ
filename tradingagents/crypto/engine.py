@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from .binance_client import BinanceAPIError, BinanceClient
 from .config import CryptoTradingConfig
 from .execution import ExecutionRouter
+from .hyperliquid_client import HyperliquidClient
 from .models import (
     AccountBalance,
     ExecutionMode,
@@ -31,11 +32,16 @@ class ReviewedSignal:
 class CryptoTradingEngine:
     def __init__(self, config: CryptoTradingConfig | None = None):
         self.config = config or CryptoTradingConfig.from_env()
-        self.client = BinanceClient(self.config)
+        self.client = self._create_client()
         self.scanner = OpportunityScanner(self.client, self.config)
         self.strategy_fusion = StrategyFusionEngine(self.config)
         self.risk = RiskManager(self.config)
         self.execution = ExecutionRouter(self.client, self.config)
+
+    def _create_client(self):
+        if self.config.exchange_provider.strip().lower() == "hyperliquid":
+            return HyperliquidClient(self.config)
+        return BinanceClient(self.config)
 
     def scan_and_review(
         self,
@@ -79,7 +85,7 @@ class CryptoTradingEngine:
     def _safe_symbol_rules(self, symbol: str) -> SymbolRules | None:
         try:
             return self.client.get_symbol_rules(symbol)
-        except BinanceAPIError:
+        except Exception:
             return None
 
     def _quote_balances_for_execution(
@@ -92,5 +98,5 @@ class CryptoTradingEngine:
             return {}
         try:
             return {balance.asset: balance.free for balance in self.account_balances()}
-        except BinanceAPIError:
+        except Exception:
             return {}
