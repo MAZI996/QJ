@@ -9,6 +9,7 @@ from .config import CryptoTradingConfig
 from .decision_journal import DecisionJournalWrite, write_workflow_report
 from .engine import CryptoTradingEngine
 from .models import OpportunitySignal, OrderIntent, RiskDecision
+from .strategy_fusion import HIGH_STAR_STRATEGY_REFERENCES, StrategyFusionEngine
 from .workflow_report import CryptoTradingAgentsWorkflow, CryptoWorkflowReport
 
 __all__ = [
@@ -17,8 +18,10 @@ __all__ = [
     "CryptoTradingAgentsWorkflow",
     "CryptoWorkflowReport",
     "DecisionJournalWrite",
+    "HIGH_STAR_STRATEGY_REFERENCES",
     "OpportunitySignal",
     "OrderIntent",
     "RiskDecision",
+    "StrategyFusionEngine",
     "write_workflow_report",
 ]

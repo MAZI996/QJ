@@ -16,6 +16,7 @@ Use the workflow report when you need an auditable decision trail:
 ```powershell
 python -m cli.main crypto-workflow --symbols BTCUSDT,ETHUSDT,SOLUSDT --mode analysis
 python -m cli.main crypto-workflow --symbols BTCUSDT,ETHUSDT --mode analysis --ai-review
+python -m cli.main crypto-workflow --symbols BTCUSDT,ETHUSDT --mode analysis --no-fusion
 ```
 
 The command is safe by default:
@@ -23,6 +24,7 @@ The command is safe by default:
 - `--mode analysis` does not place orders.
 - `--ai-review` is advisory only.
 - `--save-report` is enabled by default and writes a local decision journal.
+- `--fusion` is enabled by default and applies conservative multi-strategy scoring before risk.
 - Real Binance execution still requires the execution router, the deterministic
   risk gate, live mode, live config, and the explicit live confirmation phrase.
 

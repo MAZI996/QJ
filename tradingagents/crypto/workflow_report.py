@@ -303,7 +303,9 @@ def _candidate_line(item: ReviewedSignal) -> str:
         f"take-profit {_format_optional(signal.take_profit)}, "
         f"24h change {_format_optional(metrics.get('change_pct_24h'))}%, "
         f"volume ratio {_format_optional(metrics.get('volume_ratio_20'))}, "
-        f"quote volume {_format_optional(metrics.get('quote_volume_24h'))} USDT"
+        f"quote volume {_format_optional(metrics.get('quote_volume_24h'))} USDT, "
+        f"fusion score {_format_optional(metrics.get('fusion_score'))}, "
+        f"fusion delta {_format_optional(metrics.get('fusion_delta'))}"
     )
 
 

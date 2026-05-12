@@ -80,6 +80,8 @@ class CryptoTradingConfig:
     lana_min_oi_change_pct: float = 8.0
     lana_fixed_stop_loss_pct: float = 0.025
     lana_take_profit_r_multiple: float = 2.0
+    strategy_fusion_enabled: bool = True
+    strategy_fusion_min_score: float = 0.45
 
     ai_router: str = "tradingagents"
     ai_model: str = ""
@@ -160,6 +162,8 @@ class CryptoTradingConfig:
                 prefix + "LANA_TAKE_PROFIT_R_MULTIPLE",
                 2.0,
             ),
+            strategy_fusion_enabled=_bool_env(prefix + "STRATEGY_FUSION_ENABLED", True),
+            strategy_fusion_min_score=_float_env(prefix + "STRATEGY_FUSION_MIN_SCORE", 0.45),
             ai_router=os.getenv(prefix + "AI_ROUTER", "tradingagents"),
             ai_model=os.getenv(prefix + "AI_MODEL", ""),
             ai_decision_policy=os.getenv(prefix + "AI_DECISION_POLICY", "advisory_only"),

@@ -1301,6 +1301,11 @@ def crypto_scan(
         "--hotlist/--no-hotlist",
         help="Merge symbols from the local hotlist into the scan universe.",
     ),
+    fusion: bool = typer.Option(
+        True,
+        "--fusion/--no-fusion",
+        help="Enable or disable the high-star strategy fusion layer.",
+    ),
 ):
     """Scan Binance spot symbols and run the personal-account risk gate."""
 
@@ -1320,6 +1325,7 @@ def crypto_scan(
         execution_mode=mode,
         lana_strategy_enabled=lana,
         hotlist_enabled=hotlist,
+        strategy_fusion_enabled=fusion,
     )
     if hot_symbols:
         config = replace(
@@ -1461,6 +1467,11 @@ def crypto_workflow(
         "--hotlist/--no-hotlist",
         help="Merge symbols from the local hotlist into the scan universe.",
     ),
+    fusion: bool = typer.Option(
+        True,
+        "--fusion/--no-fusion",
+        help="Enable or disable the high-star strategy fusion layer.",
+    ),
     save_report: bool = typer.Option(
         True,
         "--save-report/--no-save-report",
@@ -1494,6 +1505,7 @@ def crypto_workflow(
         execution_mode=mode,
         lana_strategy_enabled=lana,
         hotlist_enabled=hotlist,
+        strategy_fusion_enabled=fusion,
     )
     if hot_symbols:
         config = replace(
@@ -1537,6 +1549,7 @@ def crypto_workflow(
                 "execute_top": execute_top,
                 "lana_enabled": lana,
                 "hotlist_enabled": hotlist,
+                "strategy_fusion_enabled": fusion,
             },
         )
         console.print(f"[green]Decision journal:[/green] {saved.jsonl_path}")

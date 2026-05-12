@@ -17,6 +17,7 @@ from .models import (
 )
 from .risk import RiskManager
 from .scanner import OpportunityScanner
+from .strategy_fusion import StrategyFusionEngine
 
 
 @dataclass(frozen=True)
@@ -32,6 +33,7 @@ class CryptoTradingEngine:
         self.config = config or CryptoTradingConfig.from_env()
         self.client = BinanceClient(self.config)
         self.scanner = OpportunityScanner(self.client, self.config)
+        self.strategy_fusion = StrategyFusionEngine(self.config)
         self.risk = RiskManager(self.config)
         self.execution = ExecutionRouter(self.client, self.config)
 
@@ -42,7 +44,11 @@ class CryptoTradingEngine:
         execution_mode: ExecutionMode | None = None,
         live_confirmation: str = "",
     ) -> list[ReviewedSignal]:
-        signals = self.scanner.scan(symbols)
+        signals = sorted(
+            (self.strategy_fusion.fuse(signal) for signal in self.scanner.scan(symbols)),
+            key=lambda signal: signal.confidence,
+            reverse=True,
+        )
         reviewed: list[ReviewedSignal] = []
         executed = False
         quote_balances = self._quote_balances_for_execution(execute_top, execution_mode)
