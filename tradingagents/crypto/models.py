@@ -103,6 +103,7 @@ class AITradeReview:
     summary: str
     main_risk: str
     invalidation: str
+    role_notes: str
     model: str
     router: str
     raw_response: str = ""

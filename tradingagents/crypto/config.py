@@ -66,6 +66,7 @@ class CryptoTradingConfig:
     ai_router: str = "tradingagents"
     ai_model: str = ""
     ai_decision_policy: str = "advisory_only"
+    ai_agent_style: str = "tradingagents_crypto"
     hermes_base_url: str = ""
     hermes_api_key: str = ""
     hermes_timeout_seconds: int = 45
@@ -108,6 +109,7 @@ class CryptoTradingConfig:
             ai_router=os.getenv(prefix + "AI_ROUTER", "tradingagents"),
             ai_model=os.getenv(prefix + "AI_MODEL", ""),
             ai_decision_policy=os.getenv(prefix + "AI_DECISION_POLICY", "advisory_only"),
+            ai_agent_style=os.getenv(prefix + "AI_AGENT_STYLE", "tradingagents_crypto"),
             hermes_base_url=os.getenv(prefix + "HERMES_BASE_URL", ""),
             hermes_api_key=os.getenv(prefix + "HERMES_API_KEY", ""),
             hermes_timeout_seconds=_int_env(prefix + "HERMES_TIMEOUT_SECONDS", 45),

@@ -6,6 +6,7 @@ but execution still has to pass the deterministic risk gate.
 
 from __future__ import annotations
 
+from .agent_workflow import build_tradingagents_crypto_prompt
 from .engine import ReviewedSignal
 from .models import AITradeReview
 
@@ -20,43 +21,7 @@ class CryptoAIAdvisor:
         return self.review_structured(reviewed).raw_response
 
     def review_structured(self, reviewed: list[ReviewedSignal]) -> AITradeReview:
-        top = reviewed[:5]
-        blocks = []
-        for item in top:
-            signal = item.signal
-            risk = item.risk
-            blocks.append(
-                "\n".join(
-                    [
-                        f"Symbol: {signal.symbol}",
-                        f"Side: {signal.side}",
-                        f"Confidence: {signal.confidence:.2f}",
-                        f"Entry: {signal.entry_price}",
-                        f"Stop: {signal.stop_loss}",
-                        f"Take profit: {signal.take_profit}",
-                        f"Risk approved: {risk.approved}",
-                        f"Reasons: {'; '.join(signal.reasons)}",
-                        f"Rejected rules: {'; '.join(risk.rejected_rules)}",
-                    ]
-                )
-            )
-
-        prompt = f"""
-You are reviewing crypto spot trading candidates for a personal Binance account.
-Do not promise profit. Do not recommend leverage. Do not bypass risk controls.
-
-Return Chinese output with exactly these labels:
-Action: BUY, HOLD, or REJECT
-Confidence: a decimal between 0 and 1
-Summary: best candidate, or say none
-Main risk: the most important risk
-Invalidation: market condition that invalidates the setup
-
-Never suggest leverage. Never bypass deterministic risk controls.
-
-Candidates:
-{chr(10).join(blocks)}
-"""
+        prompt = build_tradingagents_crypto_prompt(reviewed)
         response = self.llm.invoke(prompt)
         text = getattr(response, "content", str(response))
         return _parse_text_review(text, router=self.router, model=self.model)
@@ -86,6 +51,7 @@ def _parse_text_review(text: str, router: str, model: str) -> AITradeReview:
         summary=fields.get("summary", ""),
         main_risk=fields.get("main risk", ""),
         invalidation=fields.get("invalidation", ""),
+        role_notes=fields.get("role notes", ""),
         model=model,
         router=router,
         raw_response=text,
