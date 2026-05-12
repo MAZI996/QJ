@@ -1254,5 +1254,152 @@ def analyze(
     run_analysis(checkpoint=checkpoint)
 
 
+@app.command("crypto-scan")
+def crypto_scan(
+    symbols: Optional[str] = typer.Option(
+        None,
+        "--symbols",
+        help="Comma-separated Binance spot symbols, e.g. BTCUSDT,ETHUSDT.",
+    ),
+    interval: Optional[str] = typer.Option(
+        None,
+        "--interval",
+        help="Binance kline interval, e.g. 5m, 15m, 1h.",
+    ),
+    mode: str = typer.Option(
+        "analysis",
+        "--mode",
+        help="Execution mode: analysis, paper, testnet, or live.",
+    ),
+    execute_top: bool = typer.Option(
+        False,
+        "--execute-top",
+        help="Execute only the top risk-approved signal in the selected mode.",
+    ),
+    live_confirm: str = typer.Option(
+        "",
+        "--live-confirm",
+        help="Required confirmation phrase for real Binance live orders.",
+    ),
+    ai_review: bool = typer.Option(
+        False,
+        "--ai-review",
+        help="Ask the configured LLM to review the top scanned opportunities without executing orders.",
+    ),
+):
+    """Scan Binance spot symbols and run the personal-account risk gate."""
+
+    from dataclasses import replace
+
+    from tradingagents.crypto import CryptoTradingConfig, CryptoTradingEngine
+
+    valid_modes = {"analysis", "paper", "testnet", "live"}
+    if mode not in valid_modes:
+        raise typer.BadParameter(f"mode must be one of: {', '.join(sorted(valid_modes))}")
+
+    config = CryptoTradingConfig.from_env()
+    if interval:
+        config = replace(config, interval=interval)
+    config = replace(config, execution_mode=mode)
+
+    selected_symbols = None
+    if symbols:
+        selected_symbols = tuple(item.strip().upper() for item in symbols.split(",") if item.strip())
+
+    engine = CryptoTradingEngine(config)
+    console.print(
+        Panel(
+            f"模式: {mode} | Testnet: {config.testnet} | 实盘开关: {config.enable_live_orders}",
+            title="Binance 个人账户扫描",
+            border_style="cyan",
+        )
+    )
+
+    rows = engine.scan_and_review(
+        selected_symbols,
+        execute_top=execute_top,
+        execution_mode=mode,  # type: ignore[arg-type]
+        live_confirmation=live_confirm,
+    )
+
+    table = Table(title="机会扫描与风控结果", box=box.SIMPLE_HEAVY)
+    table.add_column("交易对", style="bold")
+    table.add_column("方向")
+    table.add_column("置信度", justify="right")
+    table.add_column("入场", justify="right")
+    table.add_column("止损", justify="right")
+    table.add_column("止盈", justify="right")
+    table.add_column("风控")
+    table.add_column("数量", justify="right")
+    table.add_column("执行")
+
+    for item in rows:
+        signal = item.signal
+        risk = item.risk
+        intent = risk.intent
+        execution_message = item.execution.message if item.execution else "-"
+        table.add_row(
+            signal.symbol,
+            signal.side,
+            f"{signal.confidence:.2f}",
+            f"{signal.entry_price:.4f}",
+            f"{signal.stop_loss:.4f}" if signal.stop_loss else "-",
+            f"{signal.take_profit:.4f}" if signal.take_profit else "-",
+            "通过" if risk.approved else "拒绝",
+            f"{intent.quantity:.8f}" if intent else "-",
+            execution_message,
+        )
+
+    console.print(table)
+    for item in rows[:3]:
+        console.print(f"\n[bold]{item.signal.symbol}[/bold] {item.signal.strategy}")
+        for reason in item.signal.reasons:
+            console.print(f"  - {reason}")
+        if item.risk.rejected_rules:
+            console.print("  [red]风控拒绝原因:[/red]")
+            for rule in item.risk.rejected_rules:
+                console.print(f"  - {rule}")
+
+    if ai_review:
+        from tradingagents.default_config import DEFAULT_CONFIG
+        from tradingagents.crypto.advisor import CryptoAIAdvisor
+        from tradingagents.llm_clients.factory import create_llm_client
+
+        llm = create_llm_client(
+            provider=DEFAULT_CONFIG["llm_provider"],
+            model=DEFAULT_CONFIG["quick_think_llm"],
+            base_url=DEFAULT_CONFIG.get("backend_url"),
+        )
+        console.print("\n[bold cyan]AI 评审[/bold cyan]")
+        console.print(Markdown(CryptoAIAdvisor(llm).review(rows)))
+
+
+@app.command("crypto-account")
+def crypto_account():
+    """Show non-zero Binance balances for personal-account API verification."""
+
+    from tradingagents.crypto import CryptoTradingConfig, CryptoTradingEngine
+
+    config = CryptoTradingConfig.from_env()
+    engine = CryptoTradingEngine(config)
+    balances = engine.account_balances()
+
+    table = Table(title="Binance 个人账户余额", box=box.SIMPLE_HEAVY)
+    table.add_column("资产", style="bold")
+    table.add_column("可用", justify="right")
+    table.add_column("冻结", justify="right")
+    for balance in balances:
+        table.add_row(balance.asset, f"{balance.free:.8f}", f"{balance.locked:.8f}")
+
+    console.print(
+        Panel(
+            f"Base URL: {config.resolved_base_url} | Testnet: {config.testnet}",
+            title="账户连接",
+            border_style="cyan",
+        )
+    )
+    console.print(table)
+
+
 if __name__ == "__main__":
     app()
