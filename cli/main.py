@@ -1594,5 +1594,14 @@ def crypto_account():
     console.print(table)
 
 
+@app.command("crypto-base")
+def crypto_base():
+    """Show the TradingAgents base-layer contract for this crypto extension."""
+
+    from tradingagents.crypto.base_contract import describe_base_contract
+
+    console.print(Panel(describe_base_contract(), title="TradingAgents Base", border_style="green"))
+
+
 if __name__ == "__main__":
     app()

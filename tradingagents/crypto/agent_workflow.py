@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from .base_contract import TRADINGAGENTS_ROLE_CHAIN
 from .engine import ReviewedSignal
 
 
@@ -67,7 +68,10 @@ You are running a crypto adaptation of the TradingAgents framework for a
 personal Binance spot account. Follow the same role hand-off pattern, but do
 not call external tools in this step.
 
-TradingAgents role sequence:
+Canonical TradingAgents role chain:
+{" -> ".join(TRADINGAGENTS_ROLE_CHAIN)}
+
+Crypto role responsibilities:
 {role_block}
 
 Hard constraints:
