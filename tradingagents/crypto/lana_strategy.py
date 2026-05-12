@@ -1,8 +1,8 @@
 """Lana-inspired crypto opportunity filter.
 
 The referenced post describes a high-risk attention strategy: scrape high
-traffic/high-post-volume Binance Square coins, then pick volatile gainers and
-place a stop immediately. This module adapts that idea into a spot-only signal
+traffic/high-post-volume social/forum coins, then pick volatile gainers and
+place a stop immediately. This module adapts that idea into a long-only signal
 layer. Open interest is an optional extra filter from our system design, not a
 required part of the original post.
 """

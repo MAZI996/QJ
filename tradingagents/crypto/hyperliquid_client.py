@@ -25,6 +25,46 @@ class HyperliquidMarket:
     only_isolated: bool
 
 
+@dataclass(frozen=True)
+class HyperliquidBookLevel:
+    price: float
+    size: float
+    order_count: int = 0
+
+    @property
+    def notional_usdc(self) -> float:
+        return self.price * self.size
+
+
+@dataclass(frozen=True)
+class HyperliquidOrderBook:
+    coin: str
+    time_ms: int
+    bids: tuple[HyperliquidBookLevel, ...]
+    asks: tuple[HyperliquidBookLevel, ...]
+
+    @property
+    def best_bid(self) -> float | None:
+        return self.bids[0].price if self.bids else None
+
+    @property
+    def best_ask(self) -> float | None:
+        return self.asks[0].price if self.asks else None
+
+    @property
+    def mid_price(self) -> float | None:
+        if self.best_bid is None or self.best_ask is None:
+            return None
+        return (self.best_bid + self.best_ask) / 2
+
+    @property
+    def spread_bps(self) -> float | None:
+        mid = self.mid_price
+        if mid is None or mid <= 0 or self.best_bid is None or self.best_ask is None:
+            return None
+        return ((self.best_ask - self.best_bid) / mid) * 10_000
+
+
 class HyperliquidClient:
     def __init__(self, config: CryptoTradingConfig):
         self.config = config
@@ -42,6 +82,44 @@ class HyperliquidClient:
         if not isinstance(payload, dict):
             return {}
         return {str(key).upper(): float(value) for key, value in payload.items()}
+
+    def get_l2_book(self, symbol: str) -> HyperliquidOrderBook:
+        coin = self.normalize_symbol(symbol)
+        payload = self._info({"type": "l2Book", "coin": coin})
+        if not isinstance(payload, dict):
+            raise HyperliquidAPIError(f"Invalid l2Book payload for {coin}.")
+        levels = payload.get("levels", [])
+        if not isinstance(levels, list) or len(levels) < 2:
+            raise HyperliquidAPIError(f"l2Book payload for {coin} has no bid/ask levels.")
+        return HyperliquidOrderBook(
+            coin=str(payload.get("coin", coin)).upper(),
+            time_ms=int(payload.get("time", 0) or 0),
+            bids=_parse_book_side(levels[0]),
+            asks=_parse_book_side(levels[1]),
+        )
+
+    def get_asset_contexts(self) -> dict[str, dict[str, Any]]:
+        payload = self._info({"type": "metaAndAssetCtxs"})
+        if not isinstance(payload, list) or len(payload) < 2:
+            return {}
+        meta, contexts = payload[0], payload[1]
+        if not isinstance(meta, dict) or not isinstance(contexts, list):
+            return {}
+        universe = meta.get("universe", [])
+        if not isinstance(universe, list):
+            return {}
+        result: dict[str, dict[str, Any]] = {}
+        for market, context in zip(universe, contexts):
+            if not isinstance(market, dict) or not isinstance(context, dict):
+                continue
+            name = str(market.get("name", "")).upper()
+            if name:
+                result[name] = context
+        return result
+
+    def get_asset_context(self, symbol: str) -> dict[str, Any]:
+        coin = self.normalize_symbol(symbol)
+        return self.get_asset_contexts().get(coin, {})
 
     def get_user_state(self, wallet_address: str | None = None) -> dict[str, Any]:
         address = wallet_address or self.config.hyperliquid_wallet_address
@@ -201,3 +279,27 @@ def _interval_to_ms(interval: str) -> int:
         "d": 86_400_000,
     }
     return amount * multipliers.get(unit, 3_600_000)
+
+
+def _parse_book_side(rows: Any) -> tuple[HyperliquidBookLevel, ...]:
+    if not isinstance(rows, list):
+        return ()
+    levels: list[HyperliquidBookLevel] = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        levels.append(
+            HyperliquidBookLevel(
+                price=_safe_float(row.get("px")),
+                size=_safe_float(row.get("sz")),
+                order_count=int(row.get("n", 0) or 0),
+            )
+        )
+    return tuple(level for level in levels if level.price > 0 and level.size > 0)
+
+
+def _safe_float(value: Any) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return 0.0

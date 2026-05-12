@@ -1,4 +1,4 @@
-"""Protective stop/take-profit order planning for Binance spot positions."""
+"""Protective stop/take-profit order planning for legacy Binance spot positions."""
 
 from __future__ import annotations
 

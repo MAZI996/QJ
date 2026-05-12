@@ -51,6 +51,8 @@ class HyperliquidDiagnostics:
             self._check_sdk(),
             self._check_meta(),
             self._check_all_mids(coin),
+            self._check_l2_book(coin),
+            self._check_asset_context(coin),
             self._check_candles(coin),
             self._check_account(),
         ]
@@ -106,6 +108,48 @@ class HyperliquidDiagnostics:
             "PASS",
             "Mid prices loaded.",
             {"symbol": coin, "mid": mids[coin]},
+        )
+
+    def _check_l2_book(self, coin: str) -> HyperliquidDiagnosticStep:
+        try:
+            book = self.client.get_l2_book(coin)
+        except HyperliquidAPIError as exc:
+            return HyperliquidDiagnosticStep("l2_book", "FAIL", str(exc))
+        if not book.bids or not book.asks:
+            return HyperliquidDiagnosticStep("l2_book", "FAIL", "No bid/ask levels returned.")
+        return HyperliquidDiagnosticStep(
+            "l2_book",
+            "PASS",
+            "Order book loaded.",
+            {
+                "best_bid": book.best_bid,
+                "best_ask": book.best_ask,
+                "spread_bps": book.spread_bps,
+                "bid_levels": len(book.bids),
+                "ask_levels": len(book.asks),
+            },
+        )
+
+    def _check_asset_context(self, coin: str) -> HyperliquidDiagnosticStep:
+        try:
+            context = self.client.get_asset_context(coin)
+        except HyperliquidAPIError as exc:
+            return HyperliquidDiagnosticStep("asset_context", "FAIL", str(exc))
+        if not context:
+            return HyperliquidDiagnosticStep(
+                "asset_context",
+                "WARN",
+                f"No asset context returned for {coin}.",
+            )
+        return HyperliquidDiagnosticStep(
+            "asset_context",
+            "PASS",
+            "Asset context loaded.",
+            {
+                "funding": context.get("funding"),
+                "open_interest": context.get("openInterest"),
+                "mark_price": context.get("markPx"),
+            },
         )
 
     def _check_candles(self, coin: str) -> HyperliquidDiagnosticStep:

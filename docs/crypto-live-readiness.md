@@ -21,8 +21,9 @@ python -m cli.main crypto-positions
 Implemented in `tradingagents/crypto/protective_orders.py` and wired into
 `ExecutionRouter`.
 
-- Protective sell plans use Binance Spot OCO-style params.
-- Live OCO submission is gated behind
+- Current protective sell plans are legacy Binance Spot OCO-style params.
+- Hyperliquid protective orders need the official signed adapter before live use.
+- Legacy live OCO submission is gated behind
   `TRADINGAGENTS_CRYPTO_PROTECTIVE_OCO_ENABLED=true`.
 - The default remains disabled until live order behavior is verified.
 
@@ -34,7 +35,10 @@ python -m cli.main crypto-protective-plan
 
 Implemented in `tradingagents/crypto/order_recovery.py`.
 
-- Recovery reads `openOrders` and recent `myTrades` for selected symbols.
+- Current recovery reads legacy Binance `openOrders` and recent `myTrades` for
+  selected symbols.
+- Hyperliquid recovery should be implemented against account state/user events
+  before live execution is enabled.
 - Trade fills update local positions.
 - User-data `executionReport` payloads can be normalized into local position
   state. A long-running websocket process is still the next deployment step.
@@ -86,7 +90,7 @@ python -m cli.main crypto-hermes-check
 
 Implemented in `tradingagents/crypto/attention_harvester.py`.
 
-Drop UTF-8 `.txt` files from X, Binance Square, forums, Telegram exports, or
+Drop UTF-8 `.txt` files from X, Hyperliquid ecosystem posts, forums, Telegram exports, or
 news scrapers into `TRADINGAGENTS_CRYPTO_ATTENTION_SOURCE_DIR`; then harvest:
 
 ```powershell
@@ -104,10 +108,12 @@ $env:TRADINGAGENTS_CRYPTO_RISK_PER_TRADE_PCT="0.005"
 $env:TRADINGAGENTS_CRYPTO_MAX_LOSS_PER_TRADE_USDT="0.50"
 $env:TRADINGAGENTS_CRYPTO_DAILY_LOSS_LIMIT_USDT="3"
 $env:TRADINGAGENTS_CRYPTO_MAX_POSITION_PCT="0.10"
+$env:TRADINGAGENTS_CRYPTO_EXCHANGE_PROVIDER="hyperliquid"
+$env:TRADINGAGENTS_CRYPTO_HYPERLIQUID_MAX_LEVERAGE="1"
 $env:TRADINGAGENTS_CRYPTO_PROTECTIVE_OCO_ENABLED="false"
 $env:TRADINGAGENTS_CRYPTO_EMERGENCY_STOP_FILE="C:\tradingagents-stop.txt"
 ```
 
-Do not enable live OCO or live market orders until `crypto-account`,
-`crypto-recover-orders`, paper trading, and testnet behavior are verified on the
-actual Binance account.
+Do not enable live Hyperliquid market orders until `crypto-account`,
+Hyperliquid recovery, paper trading, and testnet behavior are verified on the
+actual account.

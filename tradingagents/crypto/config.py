@@ -93,6 +93,12 @@ class CryptoTradingConfig:
     lana_take_profit_r_multiple: float = 2.0
     strategy_fusion_enabled: bool = True
     strategy_fusion_min_score: float = 0.45
+    market_quality_enabled: bool = True
+    market_quality_max_spread_bps: float = 8.0
+    market_quality_min_depth_usdc: float = 10_000.0
+    market_quality_depth_levels: int = 5
+    market_quality_max_abs_imbalance: float = 0.80
+    market_quality_max_abs_funding_rate: float = 0.001
 
     ai_router: str = "tradingagents"
     ai_model: str = ""
@@ -104,7 +110,7 @@ class CryptoTradingConfig:
 
     execution_mode: ExecutionMode = "analysis"
     enable_live_orders: bool = False
-    live_confirm_phrase: str = "I_UNDERSTAND_THIS_PLACES_REAL_BINANCE_ORDERS"
+    live_confirm_phrase: str = "I_UNDERSTAND_THIS_PLACES_REAL_HYPERLIQUID_ORDERS"
     state_dir: Path = Path.home() / ".tradingagents" / "crypto"
     emergency_stop_file: Path | None = None
 
@@ -205,6 +211,24 @@ class CryptoTradingConfig:
             ),
             strategy_fusion_enabled=_bool_env(prefix + "STRATEGY_FUSION_ENABLED", True),
             strategy_fusion_min_score=_float_env(prefix + "STRATEGY_FUSION_MIN_SCORE", 0.45),
+            market_quality_enabled=_bool_env(prefix + "MARKET_QUALITY_ENABLED", True),
+            market_quality_max_spread_bps=_float_env(
+                prefix + "MARKET_QUALITY_MAX_SPREAD_BPS",
+                8.0,
+            ),
+            market_quality_min_depth_usdc=_float_env(
+                prefix + "MARKET_QUALITY_MIN_DEPTH_USDC",
+                10_000.0,
+            ),
+            market_quality_depth_levels=_int_env(prefix + "MARKET_QUALITY_DEPTH_LEVELS", 5),
+            market_quality_max_abs_imbalance=_float_env(
+                prefix + "MARKET_QUALITY_MAX_ABS_IMBALANCE",
+                0.80,
+            ),
+            market_quality_max_abs_funding_rate=_float_env(
+                prefix + "MARKET_QUALITY_MAX_ABS_FUNDING_RATE",
+                0.001,
+            ),
             ai_router=os.getenv(prefix + "AI_ROUTER", "tradingagents"),
             ai_model=os.getenv(prefix + "AI_MODEL", ""),
             ai_decision_policy=os.getenv(prefix + "AI_DECISION_POLICY", "advisory_only"),
@@ -216,7 +240,7 @@ class CryptoTradingConfig:
             enable_live_orders=_bool_env(prefix + "ENABLE_LIVE_ORDERS", False),
             live_confirm_phrase=os.getenv(
                 prefix + "LIVE_CONFIRM_PHRASE",
-                "I_UNDERSTAND_THIS_PLACES_REAL_BINANCE_ORDERS",
+                "I_UNDERSTAND_THIS_PLACES_REAL_HYPERLIQUID_ORDERS",
             ),
             state_dir=Path(
                 os.getenv(

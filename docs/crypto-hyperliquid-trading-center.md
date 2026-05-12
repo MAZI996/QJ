@@ -16,6 +16,7 @@ $env:TRADINGAGENTS_CRYPTO_HYPERLIQUID_WALLET_ADDRESS="0xYourMainWallet"
 $env:TRADINGAGENTS_CRYPTO_HYPERLIQUID_API_WALLET_ADDRESS="0xYourApiWallet"
 $env:TRADINGAGENTS_CRYPTO_HYPERLIQUID_MAX_LEVERAGE="1"
 $env:TRADINGAGENTS_CRYPTO_ENABLE_LIVE_ORDERS="false"
+$env:TRADINGAGENTS_CRYPTO_LIVE_CONFIRM_PHRASE="I_UNDERSTAND_THIS_PLACES_REAL_HYPERLIQUID_ORDERS"
 ```
 
 Mainnet public diagnostics:
@@ -23,6 +24,7 @@ Mainnet public diagnostics:
 ```powershell
 python -m cli.main crypto-hyperliquid-check --mainnet --symbol BTC --wallet-address 0xYourWallet
 python -m cli.main crypto-hyperliquid-markets --mainnet --limit 20
+python -m cli.main crypto-market-quality --mainnet --symbols BTC,ETH,SOL,HYPE
 python -m cli.main crypto-hyperliquid-account --mainnet --wallet-address 0xYourWallet
 ```
 
@@ -32,6 +34,10 @@ TradingAgents workflow scan:
 python -m cli.main crypto-workflow --symbols BTC,ETH,SOL,HYPE --mode analysis
 python -m cli.main crypto-autopilot --symbols BTC,ETH,SOL,HYPE --mode paper --execute-top --cycles 0 --interval-seconds 300
 ```
+
+The scan path now includes the Hyperliquid market-quality gate by default:
+spread, top-book depth, order-book imbalance, and funding are checked before
+risk sizing. See `docs/crypto-market-quality.md`.
 
 ## Live Signing Boundary
 

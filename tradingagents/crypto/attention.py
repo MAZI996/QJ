@@ -1,6 +1,6 @@
 """Attention text parsing for hot-symbol discovery.
 
-This is the ingestion layer between social/forum/Binance Square text and the
+This is the ingestion layer between social/forum/Hyperliquid ecosystem text and the
 local hotlist. It deliberately stays offline: platform scrapers can feed text
 into it later without changing scanner logic.
 """

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from .binance_client import BinanceClient
 from .config import CryptoTradingConfig
 from .models import ExecutionMode, OrderIntent, OrderResult
 from .paper import PaperBroker
@@ -11,7 +10,7 @@ from .protective_orders import plan_from_intent
 
 
 class ExecutionRouter:
-    def __init__(self, client: BinanceClient, config: CryptoTradingConfig):
+    def __init__(self, client, config: CryptoTradingConfig):
         self.client = client
         self.config = config
         self.paper = PaperBroker(config)

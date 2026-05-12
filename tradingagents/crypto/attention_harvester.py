@@ -18,7 +18,7 @@ class AttentionHarvestResult:
 
 
 class AttentionHarvester:
-    """Harvest text files dropped by X/Binance Square/news scrapers."""
+    """Harvest text files dropped by X/Hyperliquid ecosystem/news scrapers."""
 
     def __init__(self, config: CryptoTradingConfig):
         self.config = config

@@ -1259,12 +1259,12 @@ def crypto_scan(
     symbols: Optional[str] = typer.Option(
         None,
         "--symbols",
-        help="Comma-separated Binance spot symbols, e.g. BTCUSDT,ETHUSDT.",
+        help="Comma-separated crypto symbols. Hyperliquid default examples: BTC,ETH,SOL,HYPE.",
     ),
     interval: Optional[str] = typer.Option(
         None,
         "--interval",
-        help="Binance kline interval, e.g. 5m, 15m, 1h.",
+        help="Kline interval, e.g. 5m, 15m, 1h.",
     ),
     mode: str = typer.Option(
         "analysis",
@@ -1279,7 +1279,7 @@ def crypto_scan(
     live_confirm: str = typer.Option(
         "",
         "--live-confirm",
-        help="Required confirmation phrase for real Binance live orders.",
+        help="Required confirmation phrase for real live orders.",
     ),
     ai_review: bool = typer.Option(
         False,
@@ -1306,8 +1306,13 @@ def crypto_scan(
         "--fusion/--no-fusion",
         help="Enable or disable the high-star strategy fusion layer.",
     ),
+    market_quality: bool = typer.Option(
+        True,
+        "--market-quality/--no-market-quality",
+        help="Enable or disable the Hyperliquid spread/depth/funding quality gate.",
+    ),
 ):
-    """Scan Binance spot symbols and run the personal-account risk gate."""
+    """Scan crypto symbols and run the personal-account risk gate."""
 
     from dataclasses import replace
 
@@ -1326,6 +1331,7 @@ def crypto_scan(
         lana_strategy_enabled=lana,
         hotlist_enabled=hotlist,
         strategy_fusion_enabled=fusion,
+        market_quality_enabled=market_quality,
     )
     if hot_symbols:
         config = replace(
@@ -1344,8 +1350,11 @@ def crypto_scan(
     engine = CryptoTradingEngine(config)
     console.print(
         Panel(
-            f"模式: {mode} | Testnet: {config.testnet} | 实盘开关: {config.enable_live_orders}",
-            title="Binance 个人账户扫描",
+            (
+                f"模式: {mode} | 交易平台: {config.exchange_provider} | "
+                f"Hyperliquid Testnet: {config.hyperliquid_testnet} | 实盘开关: {config.enable_live_orders}"
+            ),
+            title="Crypto 个人账户扫描",
             border_style="cyan",
         )
     )
@@ -1425,12 +1434,12 @@ def crypto_workflow(
     symbols: Optional[str] = typer.Option(
         None,
         "--symbols",
-        help="Comma-separated Binance spot symbols, e.g. BTCUSDT,ETHUSDT.",
+        help="Comma-separated crypto symbols. Hyperliquid default examples: BTC,ETH,SOL,HYPE.",
     ),
     interval: Optional[str] = typer.Option(
         None,
         "--interval",
-        help="Binance kline interval, e.g. 5m, 15m, 1h.",
+        help="Kline interval, e.g. 5m, 15m, 1h.",
     ),
     mode: str = typer.Option(
         "analysis",
@@ -1445,7 +1454,7 @@ def crypto_workflow(
     live_confirm: str = typer.Option(
         "",
         "--live-confirm",
-        help="Required confirmation phrase for real Binance live orders.",
+        help="Required confirmation phrase for real live orders.",
     ),
     ai_review: bool = typer.Option(
         False,
@@ -1562,12 +1571,12 @@ def crypto_hotlist(
     add: Optional[str] = typer.Option(
         None,
         "--add",
-        help="Comma-separated symbols to add, e.g. SOLUSDT,WIFUSDT.",
+        help="Comma-separated symbols to add, e.g. SOL,HYPE,WIF.",
     ),
     source: str = typer.Option(
         "manual",
         "--source",
-        help="Where this hot signal came from, e.g. x, binance-square, forum.",
+        help="Where this hot signal came from, e.g. x, hyperliquid, forum.",
     ),
     reason: str = typer.Option(
         "",
@@ -1638,12 +1647,12 @@ def crypto_autopilot(
     symbols: Optional[str] = typer.Option(
         None,
         "--symbols",
-        help="Comma-separated Binance spot symbols, e.g. BTCUSDT,ETHUSDT.",
+        help="Comma-separated crypto symbols. Hyperliquid default examples: BTC,ETH,SOL,HYPE.",
     ),
     interval: Optional[str] = typer.Option(
         None,
         "--interval",
-        help="Binance kline interval, e.g. 5m, 15m, 1h.",
+        help="Kline interval, e.g. 5m, 15m, 1h.",
     ),
     interval_seconds: int = typer.Option(
         300,
@@ -1673,7 +1682,7 @@ def crypto_autopilot(
     live_confirm: str = typer.Option(
         "",
         "--live-confirm",
-        help="Required confirmation phrase for real Binance live orders.",
+        help="Required confirmation phrase for real live orders.",
     ),
     ai_review: bool = typer.Option(
         False,
@@ -1787,7 +1796,7 @@ def crypto_attention_ingest(
     source: str = typer.Option(
         "manual-text",
         "--source",
-        help="Source label, e.g. x, binance-square, forum, telegram.",
+        help="Source label, e.g. x, hyperliquid, forum, telegram.",
     ),
     min_mentions: int = typer.Option(
         1,
@@ -1856,7 +1865,7 @@ def crypto_attention_harvest(
     source_dir: Optional[Path] = typer.Option(
         None,
         "--source-dir",
-        help="Directory of UTF-8 .txt files collected from X, Binance Square, forums, or news.",
+        help="Directory of UTF-8 .txt files collected from X, Hyperliquid ecosystem posts, forums, or news.",
     ),
     source: str = typer.Option(
         "auto-harvest",
@@ -1926,7 +1935,7 @@ def crypto_positions():
 
 @app.command("crypto-protective-plan")
 def crypto_protective_plan():
-    """Print OCO-style protective sell plans for open positions."""
+    """Print protective sell plans for open positions."""
 
     from tradingagents.crypto import CryptoTradingConfig, PositionStore
     from tradingagents.crypto.protective_orders import plan_from_position
@@ -2047,7 +2056,7 @@ def crypto_hermes_check():
 
 @app.command("crypto-account")
 def crypto_account():
-    """Show non-zero Binance balances for personal-account API verification."""
+    """Show non-zero balances/account state for personal-account API verification."""
 
     from tradingagents.crypto import CryptoTradingConfig, CryptoTradingEngine
 
@@ -2055,7 +2064,7 @@ def crypto_account():
     engine = CryptoTradingEngine(config)
     balances = engine.account_balances()
 
-    table = Table(title="Binance 个人账户余额", box=box.SIMPLE_HEAVY)
+    table = Table(title=f"{config.exchange_provider} 个人账户余额", box=box.SIMPLE_HEAVY)
     table.add_column("资产", style="bold")
     table.add_column("可用", justify="right")
     table.add_column("冻结", justify="right")
@@ -2064,7 +2073,13 @@ def crypto_account():
 
     console.print(
         Panel(
-            f"Base URL: {config.resolved_base_url} | Testnet: {config.testnet}",
+            (
+                f"Provider: {config.exchange_provider} | "
+                f"Hyperliquid URL: {config.resolved_hyperliquid_base_url} | "
+                f"Hyperliquid Testnet: {config.hyperliquid_testnet}"
+            )
+            if config.exchange_provider.strip().lower() == "hyperliquid"
+            else f"Base URL: {config.resolved_base_url} | Testnet: {config.testnet}",
             title="账户连接",
             border_style="cyan",
         )
@@ -2243,6 +2258,80 @@ def crypto_hyperliquid_markets(
             str(market.sz_decimals),
             str(market.max_leverage),
             "yes" if market.only_isolated else "no",
+        )
+    console.print(table)
+
+
+@app.command("crypto-market-quality")
+def crypto_market_quality(
+    symbols: str = typer.Option(
+        "BTC,ETH,SOL,HYPE",
+        "--symbols",
+        help="Comma-separated Hyperliquid coins to inspect.",
+    ),
+    mainnet: bool = typer.Option(
+        False,
+        "--mainnet",
+        help="Use https://api.hyperliquid.xyz instead of the default testnet URL.",
+    ),
+    max_spread_bps: Optional[float] = typer.Option(
+        None,
+        "--max-spread-bps",
+        help="Override max allowed bid/ask spread in basis points.",
+    ),
+    min_depth_usdc: Optional[float] = typer.Option(
+        None,
+        "--min-depth-usdc",
+        help="Override minimum bid and ask depth across configured top levels.",
+    ),
+):
+    """Inspect Hyperliquid spread, depth, imbalance, and funding gates."""
+
+    from dataclasses import replace
+
+    from tradingagents.crypto import CryptoTradingConfig, HyperliquidClient, MarketQualityGate
+
+    config = replace(CryptoTradingConfig.from_env(), exchange_provider="hyperliquid")
+    if mainnet:
+        config = replace(config, hyperliquid_testnet=False)
+    if max_spread_bps is not None:
+        config = replace(config, market_quality_max_spread_bps=max_spread_bps)
+    if min_depth_usdc is not None:
+        config = replace(config, market_quality_min_depth_usdc=min_depth_usdc)
+
+    client = HyperliquidClient(config)
+    gate = MarketQualityGate(config, client)
+    selected = tuple(item.strip().upper() for item in symbols.split(",") if item.strip())
+
+    table = Table(
+        title=f"Hyperliquid Market Quality: {config.resolved_hyperliquid_base_url}",
+        box=box.SIMPLE_HEAVY,
+    )
+    table.add_column("Coin", style="bold")
+    table.add_column("Pass")
+    table.add_column("Score", justify="right")
+    table.add_column("Spread bps", justify="right")
+    table.add_column("Bid Depth", justify="right")
+    table.add_column("Ask Depth", justify="right")
+    table.add_column("Imbalance", justify="right")
+    table.add_column("Funding", justify="right")
+    table.add_column("Open Interest", justify="right")
+    table.add_column("Reason")
+
+    for symbol in selected:
+        decision = gate.evaluate(symbol)
+        pass_style = "green" if decision.approved else "red"
+        table.add_row(
+            decision.symbol,
+            f"[{pass_style}]{'yes' if decision.approved else 'no'}[/{pass_style}]",
+            f"{decision.score:.2f}",
+            f"{decision.spread_bps:.2f}" if decision.spread_bps is not None else "-",
+            f"{decision.bid_depth_usdc:.0f}",
+            f"{decision.ask_depth_usdc:.0f}",
+            f"{decision.imbalance:+.2f}" if decision.imbalance is not None else "-",
+            f"{decision.funding_rate:+.5f}" if decision.funding_rate is not None else "-",
+            f"{decision.open_interest:.0f}" if decision.open_interest is not None else "-",
+            "; ".join(decision.reasons),
         )
     console.print(table)
 

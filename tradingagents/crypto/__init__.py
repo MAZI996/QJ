@@ -12,8 +12,15 @@ from .binance_diagnostics import BinanceDiagnosticReport, BinanceDiagnostics
 from .circuit_breaker import CircuitBreakerState, DailyLossCircuitBreaker
 from .decision_journal import DecisionJournalWrite, write_workflow_report
 from .engine import CryptoTradingEngine
-from .hyperliquid_client import HyperliquidAPIError, HyperliquidClient, HyperliquidMarket
+from .hyperliquid_client import (
+    HyperliquidAPIError,
+    HyperliquidBookLevel,
+    HyperliquidClient,
+    HyperliquidMarket,
+    HyperliquidOrderBook,
+)
 from .hyperliquid_diagnostics import HyperliquidDiagnosticReport, HyperliquidDiagnostics
+from .market_quality import MarketQualityDecision, MarketQualityGate
 from .models import OpportunitySignal, OrderIntent, RiskDecision
 from .order_recovery import OrderRecoveryResult, OrderRecoveryService
 from .performance import PerformanceSummary, summarize_performance
@@ -39,10 +46,14 @@ __all__ = [
     "DailyLossCircuitBreaker",
     "HIGH_STAR_STRATEGY_REFERENCES",
     "HyperliquidAPIError",
+    "HyperliquidBookLevel",
     "HyperliquidClient",
     "HyperliquidDiagnosticReport",
     "HyperliquidDiagnostics",
     "HyperliquidMarket",
+    "HyperliquidOrderBook",
+    "MarketQualityDecision",
+    "MarketQualityGate",
     "OpportunitySignal",
     "OrderIntent",
     "OrderRecoveryResult",

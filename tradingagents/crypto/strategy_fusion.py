@@ -102,7 +102,7 @@ HIGH_STAR_STRATEGY_REFERENCES: tuple[StrategyReference, ...] = (
         repo="ccxt/ccxt",
         url="https://github.com/ccxt/ccxt",
         family="exchange abstraction",
-        adopted_for="future multi-exchange adapter ideas while Binance remains the first live venue",
+        adopted_for="future multi-exchange adapter ideas while Hyperliquid remains the primary venue",
         license="MIT",
         stars_snapshot=42403,
     ),
@@ -263,7 +263,7 @@ class StrategyFusionEngine:
             return FusionContribution(
                 "volatility_rotation",
                 -0.10,
-                "price move is too extended for conservative spot chasing",
+                "price move is too extended for conservative 1x long chasing",
             )
         if 3 <= change <= 18 and volume_ratio >= 1.4:
             return FusionContribution(
@@ -294,7 +294,7 @@ class StrategyFusionEngine:
             return FusionContribution(
                 "ta_indicator_stack",
                 0.03,
-                "RSI and EMA stack support a spot trend continuation setup",
+                "RSI and EMA stack support a long-only trend continuation setup",
             )
         return FusionContribution("ta_indicator_stack", 0.00, "neutral indicator stack")
 

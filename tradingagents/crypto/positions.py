@@ -1,4 +1,4 @@
-"""Persistent spot position state for crypto automation."""
+"""Persistent position state for crypto automation."""
 
 from __future__ import annotations
 

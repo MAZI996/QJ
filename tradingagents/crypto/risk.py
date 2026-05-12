@@ -1,4 +1,4 @@
-"""Risk gate for personal Binance spot accounts."""
+"""Risk gate for personal crypto trading accounts."""
 
 from __future__ import annotations
 
@@ -19,8 +19,11 @@ class RiskManager:
         available_quote_balance: float | None = None,
     ) -> RiskDecision:
         rejected: list[str] = []
+        provider = self.config.exchange_provider.strip().lower()
         if signal.side != "BUY":
-            rejected.append("当前第一阶段只允许现货做多候选，不做空也不碰合约")
+            rejected.append("当前第一阶段只允许做多候选，不做空")
+        if provider == "hyperliquid" and self.config.hyperliquid_max_leverage > 1:
+            rejected.append("Hyperliquid 初始阶段杠杆上限必须为 1")
         if signal.confidence < self.config.min_confidence:
             rejected.append(
                 f"置信度 {signal.confidence:.2f} 低于阈值 {self.config.min_confidence:.2f}"

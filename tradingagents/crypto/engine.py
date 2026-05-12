@@ -4,10 +4,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from .binance_client import BinanceAPIError, BinanceClient
+from .binance_client import BinanceClient
 from .config import CryptoTradingConfig
 from .execution import ExecutionRouter
 from .hyperliquid_client import HyperliquidClient
+from .market_quality import MarketQualityGate
 from .models import (
     AccountBalance,
     ExecutionMode,
@@ -35,6 +36,7 @@ class CryptoTradingEngine:
         self.client = self._create_client()
         self.scanner = OpportunityScanner(self.client, self.config)
         self.strategy_fusion = StrategyFusionEngine(self.config)
+        self.market_quality = MarketQualityGate(self.config, self.client)
         self.risk = RiskManager(self.config)
         self.execution = ExecutionRouter(self.client, self.config)
 
@@ -51,7 +53,10 @@ class CryptoTradingEngine:
         live_confirmation: str = "",
     ) -> list[ReviewedSignal]:
         signals = sorted(
-            (self.strategy_fusion.fuse(signal) for signal in self.scanner.scan(symbols)),
+            (
+                self.market_quality.apply(self.strategy_fusion.fuse(signal))
+                for signal in self.scanner.scan(symbols)
+            ),
             key=lambda signal: signal.confidence,
             reverse=True,
         )

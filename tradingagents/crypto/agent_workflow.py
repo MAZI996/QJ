@@ -1,8 +1,9 @@
 """TradingAgents-style prompt assembly for crypto decisions.
 
-The original project runs a graph of specialist agents. The Binance workflow is
-kept lighter for now, but its LLM contract mirrors the same hand-off sequence so
-Hermes can later route each role to a dedicated model if needed.
+The original project runs a graph of specialist agents. The Hyperliquid
+workflow is kept lighter for now, but its LLM contract mirrors the same
+hand-off sequence so Hermes can later route each role to a dedicated model if
+needed.
 """
 
 from __future__ import annotations
@@ -22,7 +23,7 @@ class CryptoAgentRole:
 CRYPTO_AGENT_ROLES: tuple[CryptoAgentRole, ...] = (
     CryptoAgentRole(
         "Market Analyst",
-        "Read Binance price action, volume, volatility, trend, and breakout evidence.",
+        "Read Hyperliquid price action, volume, volatility, trend, and breakout evidence.",
     ),
     CryptoAgentRole(
         "Sentiment Analyst",
@@ -30,7 +31,7 @@ CRYPTO_AGENT_ROLES: tuple[CryptoAgentRole, ...] = (
     ),
     CryptoAgentRole(
         "Bull Researcher",
-        "Build the strongest long-only spot case from approved candidates.",
+        "Build the strongest long-only case from approved Hyperliquid candidates.",
     ),
     CryptoAgentRole(
         "Bear Researcher",
@@ -46,7 +47,7 @@ CRYPTO_AGENT_ROLES: tuple[CryptoAgentRole, ...] = (
     ),
     CryptoAgentRole(
         "Risk Analysts",
-        "Reject anything that violates deterministic risk, personal-account limits, or spot-only rules.",
+        "Reject anything that violates deterministic risk, personal-account limits, or the 1x long-only Hyperliquid boundary.",
     ),
     CryptoAgentRole(
         "Portfolio Manager",
@@ -65,8 +66,8 @@ def build_tradingagents_crypto_prompt(reviewed: list[ReviewedSignal]) -> str:
 
     return f"""
 You are running a crypto adaptation of the TradingAgents framework for a
-personal Binance spot account. Follow the same role hand-off pattern, but do
-not call external tools in this step.
+personal Hyperliquid account. Follow the same role hand-off pattern, but do not
+call external tools in this step.
 
 Canonical TradingAgents role chain:
 {" -> ".join(TRADINGAGENTS_ROLE_CHAIN)}
@@ -75,7 +76,9 @@ Crypto role responsibilities:
 {role_block}
 
 Hard constraints:
-- Spot only. No futures, margin, leverage, or short selling.
+- Hyperliquid is the primary trading venue.
+- Long-only during the initial stage. No short selling.
+- Leverage cap is 1 until the user explicitly approves a higher-risk phase.
 - Never promise profit.
 - Never bypass deterministic risk controls.
 - If deterministic risk rejects a candidate, the final action cannot be BUY.

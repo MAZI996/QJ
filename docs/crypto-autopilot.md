@@ -1,13 +1,13 @@
 # Crypto Autopilot
 
-`crypto-autopilot` is the unattended loop for the Binance crypto extension. It
+`crypto-autopilot` is the unattended loop for the Hyperliquid crypto extension. It
 repeatedly runs the TradingAgents crypto workflow, writes the decision journal,
 and optionally executes only the top risk-approved signal in the selected mode.
 
 The default is intentionally safe:
 
 ```powershell
-python -m cli.main crypto-autopilot --symbols BTCUSDT,ETHUSDT,SOLUSDT --mode analysis
+python -m cli.main crypto-autopilot --symbols BTC,ETH,SOL,HYPE --mode analysis
 ```
 
 Defaults:
@@ -22,29 +22,31 @@ Defaults:
 Service-style loop:
 
 ```powershell
-python -m cli.main crypto-autopilot --symbols BTCUSDT,ETHUSDT,SOLUSDT --mode paper --execute-top --cycles 0 --interval-seconds 300
+python -m cli.main crypto-autopilot --symbols BTC,ETH,SOL,HYPE --mode paper --execute-top --cycles 0 --interval-seconds 300
 ```
 
 Testnet execution:
 
 ```powershell
-python -m cli.main crypto-autopilot --symbols BTCUSDT,ETHUSDT --mode testnet --execute-top --cycles 12 --interval-seconds 300
+python -m cli.main crypto-autopilot --symbols BTC,ETH --mode testnet --execute-top --cycles 12 --interval-seconds 300
 ```
 
 Live execution requires all live guards:
 
 ```powershell
-python -m cli.main crypto-autopilot --symbols BTCUSDT,ETHUSDT --mode live --execute-top --allow-live --live-confirm I_UNDERSTAND_THIS_PLACES_REAL_BINANCE_ORDERS
+python -m cli.main crypto-autopilot --symbols BTC,ETH --mode live --execute-top --allow-live --live-confirm I_UNDERSTAND_THIS_PLACES_REAL_HYPERLIQUID_ORDERS
 ```
 
 Live mode still will not submit orders unless:
 
-- `TRADINGAGENTS_CRYPTO_BINANCE_TESTNET=false`
+- `TRADINGAGENTS_CRYPTO_HYPERLIQUID_TESTNET=false`
+- `TRADINGAGENTS_CRYPTO_HYPERLIQUID_MAX_LEVERAGE=1`
 - `TRADINGAGENTS_CRYPTO_ENABLE_LIVE_ORDERS=true`
 - `--allow-live` is present
 - `--live-confirm` matches `TRADINGAGENTS_CRYPTO_LIVE_CONFIRM_PHRASE`
 - `RiskManager` approves the order intent
 - no emergency stop file exists
+- the official Hyperliquid signing adapter is installed and enabled
 
 For a 100 USDT starting account, set risk controls before any live run:
 

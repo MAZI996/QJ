@@ -154,7 +154,7 @@ class CryptoTradingAgentsWorkflow:
 
     def _market_report(self, reviewed: tuple[ReviewedSignal, ...]) -> str:
         if not reviewed:
-            return "No Binance spot candidates were produced by the scanner."
+            return "No Hyperliquid candidates were produced by the scanner."
         lines = [
             "Top scanner candidates:",
             *(_candidate_line(item) for item in reviewed[:5]),
@@ -173,7 +173,7 @@ class CryptoTradingAgentsWorkflow:
         if not hot:
             return (
                 "No Lana/hotlist candidate dominated this scan. Treat social "
-                "attention as unknown until X, Binance Square, or forum text is ingested."
+                "attention as unknown until X, Hyperliquid ecosystem, or forum text is ingested."
             )
         return "\n".join(
             ["Attention-linked candidates:", *(_candidate_line(item) for item in hot[:5])]
@@ -187,7 +187,7 @@ class CryptoTradingAgentsWorkflow:
         if approved:
             return "\n".join(
                 [
-                    "Strongest long-only spot case:",
+                    "Strongest long-only Hyperliquid case:",
                     _candidate_line(approved[0]),
                     _reasons(approved[0]),
                 ]
@@ -231,7 +231,7 @@ class CryptoTradingAgentsWorkflow:
         return (
             "Research decision: continue with the top approved candidate only. "
             f"{best.signal.symbol} has confidence {best.signal.confidence:.2f}, "
-            f"risk/reward {_format_optional(best.signal.risk_reward)}, and a valid spot BUY intent."
+            f"risk/reward {_format_optional(best.signal.risk_reward)}, and a valid long-only BUY intent."
         )
 
     def _trader_report(self, best: ReviewedSignal | None) -> str:
@@ -244,7 +244,7 @@ class CryptoTradingAgentsWorkflow:
                 "No execution should be attempted without a risk-approved order intent."
             )
         return (
-            f"Trader action: BUY {intent.symbol} spot only, quantity {intent.quantity:.8f}, "
+            f"Trader action: BUY {intent.symbol} long-only, quantity {intent.quantity:.8f}, "
             f"notional {intent.notional_usdt:.2f} USDT, entry {intent.entry_price:.4f}, "
             f"stop {_format_optional(intent.stop_loss)}, "
             f"take-profit {_format_optional(intent.take_profit)}."
@@ -261,7 +261,7 @@ class CryptoTradingAgentsWorkflow:
                 detail = "; ".join(item.risk.rejected_rules)
             lines.append(f"- {item.signal.symbol}: {status} - {detail}")
         lines.append(
-            "Live Binance orders remain disabled unless live mode and explicit confirmation are set."
+            "Live Hyperliquid orders remain disabled unless live mode, official signing adapter, and explicit confirmation are set."
         )
         return "\n".join(lines)
 

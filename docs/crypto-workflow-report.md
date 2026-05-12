@@ -1,11 +1,11 @@
 # Crypto TradingAgents Workflow Report
 
-This layer keeps the Binance crypto extension tied to the upstream
+This layer keeps the Hyperliquid crypto extension tied to the upstream
 TradingAgents decision pattern instead of becoming a loose scanner.
 
 The workflow runs:
 
-1. Binance spot opportunity scan.
+1. Hyperliquid opportunity scan.
 2. Deterministic personal-account risk gate.
 3. Optional Hermes/LLM review.
 4. TradingAgents-style role report:
@@ -14,9 +14,9 @@ The workflow runs:
 Use the workflow report when you need an auditable decision trail:
 
 ```powershell
-python -m cli.main crypto-workflow --symbols BTCUSDT,ETHUSDT,SOLUSDT --mode analysis
-python -m cli.main crypto-workflow --symbols BTCUSDT,ETHUSDT --mode analysis --ai-review
-python -m cli.main crypto-workflow --symbols BTCUSDT,ETHUSDT --mode analysis --no-fusion
+python -m cli.main crypto-workflow --symbols BTC,ETH,SOL,HYPE --mode analysis
+python -m cli.main crypto-workflow --symbols BTC,ETH --mode analysis --ai-review
+python -m cli.main crypto-workflow --symbols BTC,ETH --mode analysis --no-fusion
 ```
 
 The command is safe by default:
@@ -25,8 +25,9 @@ The command is safe by default:
 - `--ai-review` is advisory only.
 - `--save-report` is enabled by default and writes a local decision journal.
 - `--fusion` is enabled by default and applies conservative multi-strategy scoring before risk.
-- Real Binance execution still requires the execution router, the deterministic
-  risk gate, live mode, live config, and the explicit live confirmation phrase.
+- Real Hyperliquid execution still requires the execution router, the official
+  signing adapter, the deterministic risk gate, live mode, live config, and the
+  explicit live confirmation phrase.
 
 Decision logs are written under `TRADINGAGENTS_CRYPTO_STATE_DIR`, defaulting to
 `~/.tradingagents/crypto`:

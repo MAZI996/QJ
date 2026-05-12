@@ -19,7 +19,7 @@ TRADINGAGENTS_ROLE_CHAIN: tuple[str, ...] = (
 )
 
 CRYPTO_EXTENSION_BOUNDARIES: tuple[str, ...] = (
-    "Binance market/account adapters live under tradingagents.crypto.",
+    "Hyperliquid is the primary crypto trading venue; Binance remains a legacy optional adapter.",
     "Hermes and model selection are routed through the crypto LLM router.",
     "LLM output is advisory until deterministic risk approves an order intent.",
     "Execution stays behind analysis/paper/testnet/live modes and explicit live confirmation.",

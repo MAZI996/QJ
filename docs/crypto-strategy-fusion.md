@@ -36,9 +36,9 @@ is intentionally conservative:
 CLI control:
 
 ```powershell
-python -m cli.main crypto-workflow --symbols BTCUSDT,ETHUSDT,SOLUSDT --mode analysis
-python -m cli.main crypto-workflow --symbols BTCUSDT,ETHUSDT --mode analysis --no-fusion
-python -m cli.main crypto-scan --symbols BTCUSDT,SOLUSDT --mode paper --fusion
+python -m cli.main crypto-workflow --symbols BTC,ETH,SOL,HYPE --mode analysis
+python -m cli.main crypto-workflow --symbols BTC,ETH --mode analysis --no-fusion
+python -m cli.main crypto-scan --symbols BTC,SOL --mode paper --fusion
 ```
 
 Important boundary: a small account can compound only if loss control survives.
