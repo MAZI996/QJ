@@ -8,10 +8,13 @@ order path is enabled.
 from .config import CryptoTradingConfig
 from .engine import CryptoTradingEngine
 from .models import OpportunitySignal, OrderIntent, RiskDecision
+from .workflow_report import CryptoTradingAgentsWorkflow, CryptoWorkflowReport
 
 __all__ = [
     "CryptoTradingConfig",
     "CryptoTradingEngine",
+    "CryptoTradingAgentsWorkflow",
+    "CryptoWorkflowReport",
     "OpportunitySignal",
     "OrderIntent",
     "RiskDecision",

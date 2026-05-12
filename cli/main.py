@@ -1331,7 +1331,9 @@ def crypto_scan(
 
     selected_symbols = None
     if symbols:
-        selected_symbols = tuple(item.strip().upper() for item in symbols.split(",") if item.strip())
+        selected_symbols = tuple(
+            item.strip().upper() for item in symbols.split(",") if item.strip()
+        )
 
     engine = CryptoTradingEngine(config)
     console.print(
@@ -1410,6 +1412,102 @@ def crypto_scan(
             )
         except CryptoLLMRouterNotReady as exc:
             console.print(f"[yellow]{exc}[/yellow]")
+
+
+@app.command("crypto-workflow")
+def crypto_workflow(
+    symbols: Optional[str] = typer.Option(
+        None,
+        "--symbols",
+        help="Comma-separated Binance spot symbols, e.g. BTCUSDT,ETHUSDT.",
+    ),
+    interval: Optional[str] = typer.Option(
+        None,
+        "--interval",
+        help="Binance kline interval, e.g. 5m, 15m, 1h.",
+    ),
+    mode: str = typer.Option(
+        "analysis",
+        "--mode",
+        help="Execution mode: analysis, paper, testnet, or live.",
+    ),
+    execute_top: bool = typer.Option(
+        False,
+        "--execute-top",
+        help="Execute only the top risk-approved signal in the selected mode.",
+    ),
+    live_confirm: str = typer.Option(
+        "",
+        "--live-confirm",
+        help="Required confirmation phrase for real Binance live orders.",
+    ),
+    ai_review: bool = typer.Option(
+        False,
+        "--ai-review",
+        help="Ask the configured LLM/Hermes route to review the workflow without bypassing risk.",
+    ),
+    lana: bool = typer.Option(
+        True,
+        "--lana/--no-lana",
+        help="Enable or disable the Lana-inspired attention/OI strategy layer.",
+    ),
+    hot_symbols: Optional[str] = typer.Option(
+        None,
+        "--hot-symbols",
+        help="Comma-separated manually curated hot symbols for the Lana-inspired layer.",
+    ),
+    hotlist: bool = typer.Option(
+        True,
+        "--hotlist/--no-hotlist",
+        help="Merge symbols from the local hotlist into the scan universe.",
+    ),
+):
+    """Run the crypto scan as a TradingAgents-style role workflow report."""
+
+    from dataclasses import replace
+
+    from tradingagents.crypto import CryptoTradingAgentsWorkflow, CryptoTradingConfig
+
+    valid_modes = {"analysis", "paper", "testnet", "live"}
+    if mode not in valid_modes:
+        raise typer.BadParameter(f"mode must be one of: {', '.join(sorted(valid_modes))}")
+
+    config = CryptoTradingConfig.from_env()
+    if interval:
+        config = replace(config, interval=interval)
+    config = replace(
+        config,
+        execution_mode=mode,
+        lana_strategy_enabled=lana,
+        hotlist_enabled=hotlist,
+    )
+    if hot_symbols:
+        config = replace(
+            config,
+            lana_hot_symbols=tuple(
+                item.strip().upper() for item in hot_symbols.split(",") if item.strip()
+            ),
+        )
+
+    selected_symbols = None
+    if symbols:
+        selected_symbols = tuple(item.strip().upper() for item in symbols.split(",") if item.strip())
+
+    report = CryptoTradingAgentsWorkflow(config=config).run(
+        symbols=selected_symbols,
+        execute_top=execute_top,
+        execution_mode=mode,  # type: ignore[arg-type]
+        live_confirmation=live_confirm,
+        ai_review_enabled=ai_review,
+    )
+    console.print(
+        Panel(
+            f"mode={mode} | ai_review={ai_review} | execute_top={execute_top}",
+            title="Crypto TradingAgents Workflow",
+            border_style="green",
+        )
+    )
+    console.print(Markdown(report.render_markdown()))
 
 
 @app.command("crypto-hotlist")
