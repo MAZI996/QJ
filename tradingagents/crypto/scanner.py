@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-from .binance_client import BinanceClient
+from .binance_client import BinanceAPIError, BinanceClient
 from .config import CryptoTradingConfig
 from .indicators import atr, ema, rsi, sma
+from .lana_strategy import LanaInspiredStrategy
 from .models import Candle, OpportunitySignal, TickerSnapshot
 
 
@@ -14,6 +15,7 @@ class OpportunityScanner:
     def __init__(self, client: BinanceClient, config: CryptoTradingConfig):
         self.client = client
         self.config = config
+        self.lana_strategy = LanaInspiredStrategy(config)
 
     def scan(self, symbols: tuple[str, ...] | None = None) -> list[OpportunitySignal]:
         selected = symbols or self.config.symbols
@@ -21,7 +23,24 @@ class OpportunityScanner:
         for symbol in selected:
             candles = self.client.get_klines(symbol, self.config.interval, self.config.lookback_limit)
             ticker = self.client.get_24h_ticker(symbol)
-            signals.append(self.evaluate_symbol(symbol, candles, ticker))
+            baseline = self.evaluate_symbol(symbol, candles, ticker)
+            lana_signal = None
+            if self.config.lana_strategy_enabled:
+                try:
+                    open_interest = self.client.get_open_interest_history(
+                        symbol,
+                        self.config.lana_oi_lookback,
+                        self.config.lana_oi_limit,
+                    )
+                except BinanceAPIError:
+                    open_interest = []
+                lana_signal = self.lana_strategy.evaluate(
+                    symbol,
+                    candles,
+                    ticker,
+                    open_interest,
+                )
+            signals.append(self._choose_signal(baseline, lana_signal))
         return sorted(signals, key=lambda signal: signal.confidence, reverse=True)
 
     def evaluate_symbol(
@@ -132,3 +151,16 @@ class OpportunityScanner:
             reasons=tuple(reasons),
             metrics=metrics,
         )
+
+    @staticmethod
+    def _choose_signal(
+        baseline: OpportunitySignal,
+        lana_signal: OpportunitySignal | None,
+    ) -> OpportunitySignal:
+        if lana_signal is None:
+            return baseline
+        if lana_signal.side == "BUY" and baseline.side != "BUY":
+            return lana_signal
+        if lana_signal.confidence > baseline.confidence:
+            return lana_signal
+        return baseline

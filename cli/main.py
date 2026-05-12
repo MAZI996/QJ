@@ -1286,6 +1286,16 @@ def crypto_scan(
         "--ai-review",
         help="Ask the configured LLM to review the top scanned opportunities without executing orders.",
     ),
+    lana: bool = typer.Option(
+        True,
+        "--lana/--no-lana",
+        help="Enable or disable the Lana-inspired attention/OI strategy layer.",
+    ),
+    hot_symbols: Optional[str] = typer.Option(
+        None,
+        "--hot-symbols",
+        help="Comma-separated manually curated hot symbols for the Lana-inspired layer.",
+    ),
 ):
     """Scan Binance spot symbols and run the personal-account risk gate."""
 
@@ -1300,7 +1310,14 @@ def crypto_scan(
     config = CryptoTradingConfig.from_env()
     if interval:
         config = replace(config, interval=interval)
-    config = replace(config, execution_mode=mode)
+    config = replace(config, execution_mode=mode, lana_strategy_enabled=lana)
+    if hot_symbols:
+        config = replace(
+            config,
+            lana_hot_symbols=tuple(
+                item.strip().upper() for item in hot_symbols.split(",") if item.strip()
+            ),
+        )
 
     selected_symbols = None
     if symbols:

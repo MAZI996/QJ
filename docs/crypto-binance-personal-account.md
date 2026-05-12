@@ -25,8 +25,15 @@ TRADINGAGENTS_CRYPTO_SYMBOLS=BTCUSDT,ETHUSDT,BNBUSDT,SOLUSDT
 TRADINGAGENTS_CRYPTO_INTERVAL=15m
 TRADINGAGENTS_CRYPTO_ACCOUNT_EQUITY_USDT=10000
 TRADINGAGENTS_CRYPTO_RISK_PER_TRADE_PCT=0.005
+TRADINGAGENTS_CRYPTO_MAX_LOSS_PER_TRADE_USDT=0
 TRADINGAGENTS_CRYPTO_MAX_POSITION_PCT=0.10
 TRADINGAGENTS_CRYPTO_MIN_CONFIDENCE=0.62
+TRADINGAGENTS_CRYPTO_LANA_STRATEGY_ENABLED=true
+TRADINGAGENTS_CRYPTO_LANA_HOT_SYMBOLS=BTCUSDT,ETHUSDT
+TRADINGAGENTS_CRYPTO_LANA_MIN_PRICE_CHANGE_PCT=3
+TRADINGAGENTS_CRYPTO_LANA_MAX_PRICE_CHANGE_PCT=18
+TRADINGAGENTS_CRYPTO_LANA_MIN_OI_CHANGE_PCT=8
+TRADINGAGENTS_CRYPTO_LANA_FIXED_STOP_LOSS_PCT=0.025
 TRADINGAGENTS_CRYPTO_AI_ROUTER=tradingagents
 TRADINGAGENTS_CRYPTO_AI_MODEL=
 TRADINGAGENTS_CRYPTO_AI_DECISION_POLICY=advisory_only
@@ -55,11 +62,23 @@ TRADINGAGENTS_CRYPTO_EMERGENCY_STOP_FILE=C:\tradingagents-stop.txt
 
 实盘前，Hermes 输出必须落到结构化结果：`BUY/HOLD/REJECT`、置信度、理由、主要风险、失效条件。执行层只接受风控通过后的订单意图。
 
+## Lana-inspired 策略参考
+
+`lana-inspired-attention-oi-v1` 是对 X 动态中策略描述的保守改写，放在现货候选扫描层，不开启合约或杠杆。原策略核心是：刷币安广场高流量帖子和高发帖量币种，再从涨幅榜里找波动最大的币，买入同时挂止损，后来从百分比止损改成固定亏损额。我们保留“热度 + 涨幅/波动 + 严格止损”的思路，但不照搬高杠杆合约玩法。
+
+- 热度：可通过 `TRADINGAGENTS_CRYPTO_LANA_HOT_SYMBOLS` 人工输入从 X、币安广场、论坛、社群观察到的热币。
+- 涨幅/波动：优先看 24 小时涨幅进入观察区间、成交额足够、短周期成交量放大。
+- OI：这是我们额外加的可选增强过滤，读取 Binance USD-M futures open interest history，只作为仓位活跃度参考，不作为合约下单依据。
+- 纪律：默认价格止损 `2.5%`，止盈按 `R` 倍数计算；如需模仿原帖“固定亏损额”，设置 `TRADINGAGENTS_CRYPTO_MAX_LOSS_PER_TRADE_USDT=200`，再交给个人账户硬风控确认。
+
+这套策略不会承诺盈利，也不会绕过 `RiskManager`。如果 OI 数据拿不到，扫描不会中断，只会跳过可选 OI 过滤。
+
 ## 使用入口
 
 ```powershell
 python -m cli.main crypto-account
 python -m cli.main crypto-scan --symbols BTCUSDT,ETHUSDT --mode analysis
+python -m cli.main crypto-scan --symbols BTCUSDT,ETHUSDT,SOLUSDT --hot-symbols SOLUSDT --mode analysis
 python -m cli.main crypto-scan --symbols BTCUSDT,ETHUSDT --mode analysis --ai-review
 python -m cli.main crypto-scan --symbols BTCUSDT,ETHUSDT --mode paper --execute-top
 python -m cli.main crypto-scan --symbols BTCUSDT --mode testnet --execute-top

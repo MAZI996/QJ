@@ -50,6 +50,7 @@ class CryptoTradingConfig:
     api_secret: str = ""
     testnet: bool = True
     base_url: str | None = None
+    futures_base_url: str | None = None
     recv_window_ms: int = 5000
 
     symbols: tuple[str, ...] = ("BTCUSDT", "ETHUSDT", "BNBUSDT", "SOLUSDT")
@@ -58,10 +59,23 @@ class CryptoTradingConfig:
 
     account_equity_usdt: float = 10_000.0
     risk_per_trade_pct: float = 0.005
+    max_loss_per_trade_usdt: float = 0.0
     max_position_pct: float = 0.10
     daily_loss_limit_pct: float = 0.03
     min_confidence: float = 0.62
     min_order_notional_usdt: float = 10.0
+
+    lana_strategy_enabled: bool = True
+    lana_hot_symbols: tuple[str, ...] = ()
+    lana_min_price_change_pct: float = 3.0
+    lana_max_price_change_pct: float = 18.0
+    lana_min_quote_volume_usdt: float = 20_000_000.0
+    lana_min_volume_ratio: float = 1.4
+    lana_oi_lookback: str = "4h"
+    lana_oi_limit: int = 12
+    lana_min_oi_change_pct: float = 8.0
+    lana_fixed_stop_loss_pct: float = 0.025
+    lana_take_profit_r_multiple: float = 2.0
 
     ai_router: str = "tradingagents"
     ai_model: str = ""
@@ -85,6 +99,14 @@ class CryptoTradingConfig:
             return "https://testnet.binance.vision"
         return "https://api.binance.com"
 
+    @property
+    def resolved_futures_base_url(self) -> str:
+        if self.futures_base_url:
+            return self.futures_base_url.rstrip("/")
+        if self.testnet:
+            return "https://testnet.binancefuture.com"
+        return "https://fapi.binance.com"
+
     @classmethod
     def from_env(cls) -> "CryptoTradingConfig":
         prefix = "TRADINGAGENTS_CRYPTO_"
@@ -96,16 +118,35 @@ class CryptoTradingConfig:
             ),
             testnet=_bool_env(prefix + "BINANCE_TESTNET", True),
             base_url=os.getenv(prefix + "BINANCE_BASE_URL") or None,
+            futures_base_url=os.getenv(prefix + "BINANCE_FUTURES_BASE_URL") or None,
             recv_window_ms=_int_env(prefix + "BINANCE_RECV_WINDOW_MS", 5000),
             symbols=_list_env(prefix + "SYMBOLS", ("BTCUSDT", "ETHUSDT", "BNBUSDT", "SOLUSDT")),
             interval=os.getenv(prefix + "INTERVAL", "15m"),
             lookback_limit=_int_env(prefix + "LOOKBACK_LIMIT", 120),
             account_equity_usdt=_float_env(prefix + "ACCOUNT_EQUITY_USDT", 10_000.0),
             risk_per_trade_pct=_float_env(prefix + "RISK_PER_TRADE_PCT", 0.005),
+            max_loss_per_trade_usdt=_float_env(prefix + "MAX_LOSS_PER_TRADE_USDT", 0.0),
             max_position_pct=_float_env(prefix + "MAX_POSITION_PCT", 0.10),
             daily_loss_limit_pct=_float_env(prefix + "DAILY_LOSS_LIMIT_PCT", 0.03),
             min_confidence=_float_env(prefix + "MIN_CONFIDENCE", 0.62),
             min_order_notional_usdt=_float_env(prefix + "MIN_ORDER_NOTIONAL_USDT", 10.0),
+            lana_strategy_enabled=_bool_env(prefix + "LANA_STRATEGY_ENABLED", True),
+            lana_hot_symbols=_list_env(prefix + "LANA_HOT_SYMBOLS", ()),
+            lana_min_price_change_pct=_float_env(prefix + "LANA_MIN_PRICE_CHANGE_PCT", 3.0),
+            lana_max_price_change_pct=_float_env(prefix + "LANA_MAX_PRICE_CHANGE_PCT", 18.0),
+            lana_min_quote_volume_usdt=_float_env(
+                prefix + "LANA_MIN_QUOTE_VOLUME_USDT",
+                20_000_000.0,
+            ),
+            lana_min_volume_ratio=_float_env(prefix + "LANA_MIN_VOLUME_RATIO", 1.4),
+            lana_oi_lookback=os.getenv(prefix + "LANA_OI_LOOKBACK", "4h"),
+            lana_oi_limit=_int_env(prefix + "LANA_OI_LIMIT", 12),
+            lana_min_oi_change_pct=_float_env(prefix + "LANA_MIN_OI_CHANGE_PCT", 8.0),
+            lana_fixed_stop_loss_pct=_float_env(prefix + "LANA_FIXED_STOP_LOSS_PCT", 0.025),
+            lana_take_profit_r_multiple=_float_env(
+                prefix + "LANA_TAKE_PROFIT_R_MULTIPLE",
+                2.0,
+            ),
             ai_router=os.getenv(prefix + "AI_ROUTER", "tradingagents"),
             ai_model=os.getenv(prefix + "AI_MODEL", ""),
             ai_decision_policy=os.getenv(prefix + "AI_DECISION_POLICY", "advisory_only"),

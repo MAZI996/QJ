@@ -44,6 +44,8 @@ class RiskManager:
 
         per_unit_risk = signal.entry_price - signal.stop_loss
         risk_budget = effective_equity * self.config.risk_per_trade_pct
+        if self.config.max_loss_per_trade_usdt > 0:
+            risk_budget = min(risk_budget, self.config.max_loss_per_trade_usdt)
         raw_quantity = risk_budget / per_unit_risk
         max_notional = effective_equity * self.config.max_position_pct
         if available_quote_balance is not None:

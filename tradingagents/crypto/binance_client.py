@@ -16,7 +16,7 @@ import urllib.request
 from typing import Any, Mapping
 
 from .config import CryptoTradingConfig
-from .models import AccountBalance, Candle, SymbolRules, TickerSnapshot
+from .models import AccountBalance, Candle, OpenInterestPoint, SymbolRules, TickerSnapshot
 
 
 class BinanceAPIError(RuntimeError):
@@ -55,6 +55,31 @@ class BinanceClient:
             price_change_pct_24h=float(payload["priceChangePercent"]),
             quote_volume_24h=float(payload["quoteVolume"]),
         )
+
+    def get_open_interest_history(
+        self,
+        symbol: str,
+        period: str,
+        limit: int,
+    ) -> list[OpenInterestPoint]:
+        payload = self._futures_public_get(
+            "/futures/data/openInterestHist",
+            {
+                "symbol": symbol.upper(),
+                "period": period,
+                "limit": limit,
+            },
+        )
+        points: list[OpenInterestPoint] = []
+        for row in payload:
+            points.append(
+                OpenInterestPoint(
+                    symbol=row.get("symbol", symbol.upper()),
+                    open_interest=float(row.get("sumOpenInterest", "0")),
+                    timestamp_ms=int(row.get("timestamp", 0)),
+                )
+            )
+        return points
 
     def get_symbol_rules(self, symbol: str) -> SymbolRules:
         payload = self._public_get("/api/v3/exchangeInfo", {"symbol": symbol.upper()})
@@ -118,6 +143,15 @@ class BinanceClient:
     def _public_get(self, path: str, params: Mapping[str, Any]) -> Any:
         return self._request("GET", path, params=params, signed=False)
 
+    def _futures_public_get(self, path: str, params: Mapping[str, Any]) -> Any:
+        return self._request(
+            "GET",
+            path,
+            params=params,
+            signed=False,
+            base_url=self.config.resolved_futures_base_url,
+        )
+
     def _signed_get(self, path: str, params: Mapping[str, Any]) -> Any:
         if not self.config.api_key or not self.config.api_secret:
             raise BinanceAPIError("Binance API key and secret are required for signed requests.")
@@ -154,10 +188,11 @@ class BinanceClient:
         path: str,
         params: Mapping[str, Any] | None = None,
         signed: bool = False,
+        base_url: str | None = None,
     ) -> Any:
         params = params or {}
         encoded = urllib.parse.urlencode(params)
-        url = f"{self.config.resolved_base_url}{path}"
+        url = f"{base_url or self.config.resolved_base_url}{path}"
         data = None
         if method == "GET" and encoded:
             url = f"{url}?{encoded}"

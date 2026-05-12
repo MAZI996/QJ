@@ -36,6 +36,13 @@ class TickerSnapshot:
 
 
 @dataclass(frozen=True)
+class OpenInterestPoint:
+    symbol: str
+    open_interest: float
+    timestamp_ms: int
+
+
+@dataclass(frozen=True)
 class SymbolRules:
     symbol: str
     base_asset: str

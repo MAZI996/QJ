@@ -27,6 +27,7 @@ crypto 扩展沿用这个链路，但数据和约束换成：
 
 - `tradingagents/crypto/binance_client.py`：Binance Spot REST、余额、交易规则、订单接口。
 - `tradingagents/crypto/scanner.py`：规则优先的机会扫描。
+- `tradingagents/crypto/lana_strategy.py`：参考 Lana X 动态后的热度、涨幅/波动、固定止损候选层，OI 是我们额外加入的可选增强过滤。
 - `tradingagents/crypto/risk.py`：个人账户硬风控。
 - `tradingagents/crypto/execution.py`：`analysis/paper/testnet/live` 执行路由。
 - `tradingagents/crypto/agent_workflow.py`：TradingAgents 风格的 crypto 多角色 prompt。
@@ -35,7 +36,8 @@ crypto 扩展沿用这个链路，但数据和约束换成：
 ## 后续扩展顺序
 
 1. 接入真实 Hermes endpoint 和模型选择。
-2. 增加用户数据流和订单状态恢复。
-3. 增加持仓状态机、止损止盈和急停熔断。
-4. 增加回测和纸面交易绩效统计。
-5. 再考虑把 crypto 多角色流程升级成真正的 LangGraph 图，而不是单次结构化评审 prompt。
+2. 增加自动热度采集源，把 X、币安广场、论坛、新闻、链上热度转成 `LANA_HOT_SYMBOLS`。
+3. 增加用户数据流和订单状态恢复。
+4. 增加持仓状态机、止损止盈和急停熔断。
+5. 增加回测和纸面交易绩效统计。
+6. 再考虑把 crypto 多角色流程升级成真正的 LangGraph 图，而不是单次结构化评审 prompt。
