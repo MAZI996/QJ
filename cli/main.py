@@ -1,5 +1,7 @@
 from typing import Optional
+import csv
 import datetime
+import json
 import typer
 import questionary
 from pathlib import Path
@@ -1266,6 +1268,11 @@ def crypto_scan(
         "--interval",
         help="Kline interval, e.g. 5m, 15m, 1h.",
     ),
+    lookback: Optional[int] = typer.Option(
+        None,
+        "--lookback",
+        help="Rolling lookback candles used by the scanner.",
+    ),
     mode: str = typer.Option(
         "analysis",
         "--mode",
@@ -1311,6 +1318,21 @@ def crypto_scan(
         "--market-quality/--no-market-quality",
         help="Enable or disable the Hyperliquid spread/depth/funding quality gate.",
     ),
+    champion: bool = typer.Option(
+        False,
+        "--champion/--no-champion",
+        help="Apply the current evolution champion in analysis/paper mode only.",
+    ),
+    champion_season: str = typer.Option(
+        "auto",
+        "--champion-season",
+        help="Runtime season for the champion package: auto, winter, spring, summer, or autumn.",
+    ),
+    champion_archive: Optional[Path] = typer.Option(
+        None,
+        "--champion-archive",
+        help="Optional evolution archive JSON path.",
+    ),
 ):
     """Scan crypto symbols and run the personal-account risk gate."""
 
@@ -1325,6 +1347,10 @@ def crypto_scan(
     config = CryptoTradingConfig.from_env()
     if interval:
         config = replace(config, interval=interval)
+    if lookback is not None:
+        if lookback < 60:
+            raise typer.BadParameter("lookback must be at least 60 for the scanner.")
+        config = replace(config, lookback_limit=lookback)
     config = replace(
         config,
         execution_mode=mode,
@@ -1340,12 +1366,19 @@ def crypto_scan(
                 item.strip().upper() for item in hot_symbols.split(",") if item.strip()
             ),
         )
-
     selected_symbols = None
     if symbols:
         selected_symbols = tuple(
             item.strip().upper() for item in symbols.split(",") if item.strip()
         )
+    config, champion_application = _load_runtime_champion_or_default(
+        config,
+        mode=mode,
+        enabled=champion,
+        season=champion_season,
+        archive_path=champion_archive,
+        symbols=selected_symbols,
+    )
 
     engine = CryptoTradingEngine(config)
     console.print(
@@ -1358,6 +1391,8 @@ def crypto_scan(
             border_style="cyan",
         )
     )
+    if champion_application is not None:
+        console.print(_champion_loaded_message(champion_application))
 
     rows = engine.scan_and_review(
         selected_symbols,
@@ -1441,6 +1476,11 @@ def crypto_workflow(
         "--interval",
         help="Kline interval, e.g. 5m, 15m, 1h.",
     ),
+    lookback: Optional[int] = typer.Option(
+        None,
+        "--lookback",
+        help="Rolling lookback candles used by the scanner.",
+    ),
     mode: str = typer.Option(
         "analysis",
         "--mode",
@@ -1491,6 +1531,21 @@ def crypto_workflow(
         "--journal-dir",
         help="Directory for decision_journal.jsonl and workflow report files.",
     ),
+    champion: bool = typer.Option(
+        False,
+        "--champion/--no-champion",
+        help="Apply the current evolution champion in analysis/paper mode only.",
+    ),
+    champion_season: str = typer.Option(
+        "auto",
+        "--champion-season",
+        help="Runtime season for the champion package: auto, winter, spring, summer, or autumn.",
+    ),
+    champion_archive: Optional[Path] = typer.Option(
+        None,
+        "--champion-archive",
+        help="Optional evolution archive JSON path.",
+    ),
 ):
     """Run the crypto scan as a TradingAgents-style role workflow report."""
 
@@ -1509,6 +1564,10 @@ def crypto_workflow(
     config = CryptoTradingConfig.from_env()
     if interval:
         config = replace(config, interval=interval)
+    if lookback is not None:
+        if lookback < 60:
+            raise typer.BadParameter("lookback must be at least 60 for the scanner.")
+        config = replace(config, lookback_limit=lookback)
     config = replace(
         config,
         execution_mode=mode,
@@ -1523,12 +1582,19 @@ def crypto_workflow(
                 item.strip().upper() for item in hot_symbols.split(",") if item.strip()
             ),
         )
-
     selected_symbols = None
     if symbols:
         selected_symbols = tuple(
             item.strip().upper() for item in symbols.split(",") if item.strip()
         )
+    config, champion_application = _load_runtime_champion_or_default(
+        config,
+        mode=mode,
+        enabled=champion,
+        season=champion_season,
+        archive_path=champion_archive,
+        symbols=selected_symbols,
+    )
 
     report = CryptoTradingAgentsWorkflow(config=config).run(
         symbols=selected_symbols,
@@ -1544,6 +1610,8 @@ def crypto_workflow(
             border_style="green",
         )
     )
+    if champion_application is not None:
+        console.print(_champion_loaded_message(champion_application))
     rendered_report = report.render_markdown()
     console.print(Markdown(rendered_report))
     if save_report:
@@ -1559,6 +1627,18 @@ def crypto_workflow(
                 "lana_enabled": lana,
                 "hotlist_enabled": hotlist,
                 "strategy_fusion_enabled": fusion,
+                "evolution_champion_id": (
+                    champion_application.candidate_id if champion_application else None
+                ),
+                "evolution_champion_season": (
+                    champion_application.season if champion_application else None
+                ),
+                "evolution_champion_season_source": (
+                    champion_application.season_source if champion_application else None
+                ),
+                "evolution_regime_assessment": (
+                    champion_application.regime_assessment if champion_application else None
+                ),
             },
         )
         console.print(f"[green]Decision journal:[/green] {saved.jsonl_path}")
@@ -1654,6 +1734,11 @@ def crypto_autopilot(
         "--interval",
         help="Kline interval, e.g. 5m, 15m, 1h.",
     ),
+    lookback: Optional[int] = typer.Option(
+        None,
+        "--lookback",
+        help="Rolling lookback candles used by the scanner.",
+    ),
     interval_seconds: int = typer.Option(
         300,
         "--interval-seconds",
@@ -1709,6 +1794,21 @@ def crypto_autopilot(
         "--journal-dir",
         help="Directory for decision_journal.jsonl and workflow report files.",
     ),
+    champion: bool = typer.Option(
+        False,
+        "--champion/--no-champion",
+        help="Apply the current evolution champion in analysis/paper mode only.",
+    ),
+    champion_season: str = typer.Option(
+        "auto",
+        "--champion-season",
+        help="Runtime season for the champion package: auto, winter, spring, summer, or autumn.",
+    ),
+    champion_archive: Optional[Path] = typer.Option(
+        None,
+        "--champion-archive",
+        help="Optional evolution archive JSON path.",
+    ),
 ):
     """Run repeated crypto workflow cycles for unattended automation."""
 
@@ -1731,6 +1831,10 @@ def crypto_autopilot(
     config = CryptoTradingConfig.from_env()
     if interval:
         config = replace(config, interval=interval)
+    if lookback is not None:
+        if lookback < 60:
+            raise typer.BadParameter("lookback must be at least 60 for the scanner.")
+        config = replace(config, lookback_limit=lookback)
     config = replace(
         config,
         execution_mode=mode,
@@ -1743,6 +1847,14 @@ def crypto_autopilot(
         selected_symbols = tuple(
             item.strip().upper() for item in symbols.split(",") if item.strip()
         )
+    config, champion_application = _load_runtime_champion_or_default(
+        config,
+        mode=mode,
+        enabled=champion,
+        season=champion_season,
+        archive_path=champion_archive,
+        symbols=selected_symbols,
+    )
 
     console.print(
         Panel(
@@ -1754,6 +1866,8 @@ def crypto_autopilot(
             border_style="green",
         )
     )
+    if champion_application is not None:
+        console.print(_champion_loaded_message(champion_application))
     try:
         runner = CryptoAutoPilot(config)
         for result in runner.run_loop(
@@ -1967,20 +2081,40 @@ def crypto_recover_orders(
     symbols: str = typer.Option(
         ...,
         "--symbols",
-        help="Comma-separated Binance spot symbols to recover, e.g. BTCUSDT,ETHUSDT.",
+        help="Comma-separated symbols to recover, e.g. BTC,ETH,SOL or BTCUSDT,ETHUSDT.",
+    ),
+    mainnet: bool = typer.Option(
+        False,
+        "--mainnet",
+        help="Use Hyperliquid mainnet when the configured provider is hyperliquid.",
+    ),
+    wallet_address: Optional[str] = typer.Option(
+        None,
+        "--wallet-address",
+        help="Optional Hyperliquid user wallet address for clearinghouse recovery.",
     ),
 ):
-    """Recover local position state from Binance account trades and open orders."""
+    """Recover local position state from the configured execution venue."""
+
+    from dataclasses import replace
 
     from tradingagents.crypto import CryptoTradingConfig, OrderRecoveryService
     from tradingagents.crypto.binance_client import BinanceClient
+    from tradingagents.crypto.hyperliquid_client import HyperliquidClient
 
     config = CryptoTradingConfig.from_env()
-    service = OrderRecoveryService(BinanceClient(config), config)
-    table = Table(title="Order Recovery", box=box.SIMPLE_HEAVY)
+    provider = config.exchange_provider.strip().lower()
+    if provider == "hyperliquid":
+        if mainnet:
+            config = replace(config, hyperliquid_testnet=False)
+        if wallet_address:
+            config = replace(config, hyperliquid_wallet_address=wallet_address)
+    client = HyperliquidClient(config) if provider == "hyperliquid" else BinanceClient(config)
+    service = OrderRecoveryService(client, config)
+    table = Table(title=f"Order Recovery: {provider}", box=box.SIMPLE_HEAVY)
     table.add_column("Symbol", style="bold")
     table.add_column("Open Orders", justify="right")
-    table.add_column("Trades", justify="right")
+    table.add_column("Trades/Positions", justify="right")
     table.add_column("Updated")
     table.add_column("Message")
     for symbol in [item.strip().upper() for item in symbols.split(",") if item.strip()]:
@@ -2013,6 +2147,29 @@ def crypto_performance():
     table.add_row("Wins", str(summary.wins))
     table.add_row("Losses", str(summary.losses))
     table.add_row("Win rate", f"{summary.win_rate:.2%}")
+    console.print(table)
+
+
+@app.command("crypto-paper-status")
+def crypto_paper_status():
+    """Show local paper validation status and next queued command."""
+
+    from tradingagents.crypto import CryptoTradingConfig, summarize_paper_status
+
+    config = CryptoTradingConfig.from_env()
+    summary = summarize_paper_status(config)
+    table = Table(title="Crypto Paper Status", box=box.SIMPLE_HEAVY)
+    table.add_column("Metric")
+    table.add_column("Value")
+    table.add_row("Decision runs", str(summary.decision_runs))
+    table.add_row("Paper orders", str(summary.paper_orders))
+    table.add_row("Last action", summary.last_action)
+    table.add_row("Last top symbol", summary.last_top_symbol)
+    table.add_row("Last run at", summary.last_run_at)
+    table.add_row("Last report", str(summary.last_report_path or "-"))
+    table.add_row("Queued candidates", str(summary.queue_ready_count))
+    table.add_row("Top queue command", summary.queue_top_command or "-")
+    table.add_row("Top queue note", summary.queue_top_note or "-")
     console.print(table)
 
 
@@ -2224,6 +2381,84 @@ def crypto_hyperliquid_check(
     console.print(table)
 
 
+@app.command("crypto-live-readiness")
+def crypto_live_readiness(
+    target: str = typer.Option(
+        "live",
+        "--target",
+        help="Readiness target: paper, testnet, or live.",
+    ),
+    symbol: str = typer.Option(
+        "BTC",
+        "--symbol",
+        help="Hyperliquid coin used for optional network diagnostics.",
+    ),
+    mainnet: bool = typer.Option(
+        False,
+        "--mainnet",
+        help="Evaluate against Hyperliquid mainnet instead of the default testnet config.",
+    ),
+    wallet_address: Optional[str] = typer.Option(
+        None,
+        "--wallet-address",
+        help="Optional Hyperliquid user wallet address for account diagnostics.",
+    ),
+    network: bool = typer.Option(
+        False,
+        "--network/--no-network",
+        help="Run public/account Hyperliquid diagnostics in addition to local checks.",
+    ),
+):
+    """Show read-only blockers before paper, testnet, or live execution."""
+
+    from dataclasses import replace
+
+    from tradingagents.crypto import CryptoTradingConfig, LiveReadinessChecker
+
+    normalized_target = target.strip().lower()
+    if normalized_target not in {"paper", "testnet", "live"}:
+        raise typer.BadParameter("target must be one of: paper, testnet, live.")
+
+    config = replace(CryptoTradingConfig.from_env(), exchange_provider="hyperliquid")
+    if mainnet:
+        config = replace(config, hyperliquid_testnet=False)
+    if wallet_address:
+        config = replace(config, hyperliquid_wallet_address=wallet_address)
+
+    report = LiveReadinessChecker(config).run(
+        target=normalized_target,  # type: ignore[arg-type]
+        network=network,
+        symbol=symbol,
+    )
+    color = "green" if report.ready else "red"
+    console.print(
+        Panel(
+            (
+                f"target={report.target} | ready={report.ready} | "
+                f"failures={len(report.failures)} | warnings={len(report.warnings)}"
+            ),
+            title="Crypto Live Readiness",
+            border_style=color,
+        )
+    )
+    table = Table(title="Readiness Checks", box=box.SIMPLE_HEAVY)
+    table.add_column("Check", style="bold")
+    table.add_column("Status")
+    table.add_column("Message")
+    for check in report.checks:
+        status_style = {
+            "PASS": "green",
+            "WARN": "yellow",
+            "FAIL": "red",
+        }.get(check.status, "white")
+        table.add_row(
+            check.name,
+            f"[{status_style}]{check.status}[/{status_style}]",
+            check.message,
+        )
+    console.print(table)
+
+
 @app.command("crypto-hyperliquid-markets")
 def crypto_hyperliquid_markets(
     mainnet: bool = typer.Option(
@@ -2334,6 +2569,2444 @@ def crypto_market_quality(
             "; ".join(decision.reasons),
         )
     console.print(table)
+
+
+@app.command("crypto-regime")
+def crypto_regime(
+    symbols: str = typer.Option(
+        "BTC,ETH,SOL,HYPE",
+        "--symbols",
+        help="Comma-separated Hyperliquid coins used by the regime classifier.",
+    ),
+    mainnet: bool = typer.Option(
+        True,
+        "--mainnet/--testnet",
+        help="Use mainnet public candles or testnet public candles.",
+    ),
+    interval: str = typer.Option(
+        "1h",
+        "--interval",
+        help="Kline interval for regime water-level classification.",
+    ),
+    bars: int = typer.Option(
+        96,
+        "--bars",
+        help="Historical candles to classify per symbol.",
+    ),
+    markdown_output: Optional[Path] = typer.Option(
+        None,
+        "--markdown-output",
+        help="Optional path to write a Markdown regime report.",
+    ),
+    json_output: Optional[Path] = typer.Option(
+        None,
+        "--json-output",
+        help="Optional path to write a JSON regime report.",
+    ),
+):
+    """Classify the runtime season used by evolution champion packages."""
+
+    from dataclasses import replace
+
+    from tradingagents.crypto import CryptoTradingConfig, RegimeEngine
+
+    selected = tuple(item.strip().upper() for item in symbols.split(",") if item.strip())
+    if not selected:
+        raise typer.BadParameter("symbols must include at least one coin.")
+    if bars < 12:
+        raise typer.BadParameter("bars must be at least 12.")
+    config = replace(
+        CryptoTradingConfig.from_env(),
+        exchange_provider="hyperliquid",
+        hyperliquid_testnet=not mainnet,
+        interval=interval,
+    )
+    assessment = RegimeEngine(config).assess(selected, interval=interval, bars=bars)
+    console.print(
+        Panel(
+            (
+                f"season={assessment.season} | confidence={assessment.confidence:.2%} | "
+                f"heat={assessment.heat_score:.4f} | interval={assessment.interval}"
+            ),
+            title="Crypto Regime Engine",
+            border_style="cyan",
+        )
+    )
+    reasons = Table(title="Regime Reasons", box=box.SIMPLE_HEAVY)
+    reasons.add_column("Reason")
+    for reason in assessment.reasons:
+        reasons.add_row(reason)
+    console.print(reasons)
+
+    table = Table(title="Regime Symbol Snapshots", box=box.SIMPLE_HEAVY)
+    table.add_column("Symbol", style="bold")
+    table.add_column("Bars", justify="right")
+    table.add_column("Momentum", justify="right")
+    table.add_column("Trend", justify="right")
+    table.add_column("Volatility", justify="right")
+    table.add_column("Drawdown", justify="right")
+    table.add_column("Heat", justify="right")
+    table.add_column("Quote Volume", justify="right")
+    for item in assessment.snapshots:
+        table.add_row(
+            item.symbol,
+            str(item.bars),
+            f"{item.momentum_pct:.2f}%",
+            f"{item.trend_pct:.2f}%",
+            f"{item.volatility_pct:.2f}%",
+            f"{item.drawdown_pct:.2f}%",
+            f"{item.heat_score:.4f}",
+            f"{item.quote_volume_usdt:.0f}",
+        )
+    console.print(table)
+    if markdown_output is not None:
+        markdown_output.parent.mkdir(parents=True, exist_ok=True)
+        markdown_output.write_text(assessment.render_markdown(), encoding="utf-8")
+        console.print(f"[green]Regime Markdown written:[/green] {markdown_output}")
+    if json_output is not None:
+        json_output.parent.mkdir(parents=True, exist_ok=True)
+        json_output.write_text(
+            json.dumps(assessment.to_dict(), ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        console.print(f"[green]Regime JSON written:[/green] {json_output}")
+
+
+@app.command("crypto-backtest")
+def crypto_backtest(
+    symbols: str = typer.Option(
+        "BTC,ETH,SOL,HYPE",
+        "--symbols",
+        help="Comma-separated Hyperliquid coins to replay.",
+    ),
+    mainnet: bool = typer.Option(
+        True,
+        "--mainnet/--testnet",
+        help="Use mainnet public candles or testnet public candles.",
+    ),
+    interval: Optional[str] = typer.Option(
+        None,
+        "--interval",
+        help="Kline interval, e.g. 5m, 15m, 1h.",
+    ),
+    bars: int = typer.Option(
+        500,
+        "--bars",
+        help="Historical candles to request per symbol.",
+    ),
+    lookback: int = typer.Option(
+        120,
+        "--lookback",
+        help="Rolling lookback candles used by the scanner.",
+    ),
+    max_holding_bars: int = typer.Option(
+        32,
+        "--max-holding-bars",
+        help="Maximum bars to hold a simulated trade.",
+    ),
+    fee_bps: float = typer.Option(
+        4.0,
+        "--fee-bps",
+        help="Round-trip model uses this taker fee bps on entry and exit.",
+    ),
+    slippage_bps: float = typer.Option(
+        2.0,
+        "--slippage-bps",
+        help="Adverse slippage bps applied to entry and exit fills.",
+    ),
+    fusion: bool = typer.Option(
+        True,
+        "--fusion/--no-fusion",
+        help="Enable or disable strategy fusion during replay.",
+    ),
+    lana: bool = typer.Option(
+        False,
+        "--lana/--no-lana",
+        help="Enable Lana-inspired hot-mover logic during replay.",
+    ),
+    inventory_bridge: bool = typer.Option(
+        False,
+        "--inventory-bridge/--no-inventory-bridge",
+        help="Enable the macro dead-inventory to micro float-inventory bridge.",
+    ),
+    dead_reserve_ratio: float = typer.Option(
+        0.20,
+        "--dead-reserve-ratio",
+        help="Quote-equity ratio reserved for macro DCA inventory bridge buys.",
+    ),
+    inventory_dca_slices: int = typer.Option(
+        12,
+        "--inventory-dca-slices",
+        help="Maximum macro DCA slices for the inventory bridge.",
+    ),
+    unlock_acceleration_threshold: float = typer.Option(
+        0.002,
+        "--unlock-acceleration-threshold",
+        help="Normalized acceleration threshold required to unlock dead inventory.",
+    ),
+    inventory_sell_ratio: float = typer.Option(
+        1.0,
+        "--inventory-sell-ratio",
+        help="Ratio of dead inventory to unlock and sell on each acceleration trigger.",
+    ),
+    bridge_macro_tick_bars: int = typer.Option(
+        0,
+        "--bridge-macro-tick-bars",
+        help="Macro inventory bridge tick cadence in bars. Use 0 to spread DCA slices.",
+    ),
+    bridge_ema_anchor_bars: int = typer.Option(
+        50,
+        "--bridge-ema-anchor-bars",
+        help="EMA anchor bars for the macro beta-deviation trigger.",
+    ),
+    bridge_beta_threshold: float = typer.Option(
+        0.0,
+        "--bridge-beta-threshold",
+        help="Required discount versus EMA anchor before macro DCA buys.",
+    ),
+    bridge_moon_phase_pressure: float = typer.Option(
+        0.0,
+        "--bridge-moon-phase-pressure",
+        help="Cyclical pressure multiplier applied to macro DCA budget.",
+    ),
+    bridge_deadline_force_pct: float = typer.Option(
+        0.0,
+        "--bridge-deadline-force-pct",
+        help="Fallback ratio of remaining quote reserve to deploy when beta trigger is absent.",
+    ),
+    bridge_gc_threshold_bars: int = typer.Option(
+        0,
+        "--bridge-gc-threshold-bars",
+        help="Bars after which stale dead inventory may be garbage-collected into float inventory.",
+    ),
+    bridge_gc_max_ratio: float = typer.Option(
+        0.0,
+        "--bridge-gc-max-ratio",
+        help="Maximum dead inventory ratio released by stale GC unlock.",
+    ),
+):
+    """Replay Hyperliquid candles through scanner, fusion, and risk gates."""
+
+    from dataclasses import replace
+
+    from tradingagents.crypto import (
+        BacktestInventoryBridgeConfig,
+        CryptoBacktester,
+        CryptoTradingConfig,
+    )
+
+    if bars <= lookback + 2:
+        raise typer.BadParameter("bars must be greater than lookback plus 2.")
+    if lookback < 60:
+        raise typer.BadParameter("lookback must be at least 60 for the scanner.")
+    if max_holding_bars < 1:
+        raise typer.BadParameter("max-holding-bars must be at least 1.")
+    if not 0 <= dead_reserve_ratio <= 0.95:
+        raise typer.BadParameter("dead-reserve-ratio must be between 0 and 0.95.")
+    if inventory_dca_slices < 1:
+        raise typer.BadParameter("inventory-dca-slices must be at least 1.")
+    if unlock_acceleration_threshold < 0:
+        raise typer.BadParameter("unlock-acceleration-threshold must be non-negative.")
+    if not 0 <= inventory_sell_ratio <= 1:
+        raise typer.BadParameter("inventory-sell-ratio must be between 0 and 1.")
+    if bridge_macro_tick_bars < 0:
+        raise typer.BadParameter("bridge-macro-tick-bars must be 0 or a positive integer.")
+    if bridge_ema_anchor_bars < 2:
+        raise typer.BadParameter("bridge-ema-anchor-bars must be at least 2.")
+    if bridge_beta_threshold < 0:
+        raise typer.BadParameter("bridge-beta-threshold must be non-negative.")
+    if bridge_moon_phase_pressure < 0:
+        raise typer.BadParameter("bridge-moon-phase-pressure must be non-negative.")
+    if not 0 <= bridge_deadline_force_pct <= 1:
+        raise typer.BadParameter("bridge-deadline-force-pct must be between 0 and 1.")
+    if bridge_gc_threshold_bars < 0:
+        raise typer.BadParameter("bridge-gc-threshold-bars must be 0 or a positive integer.")
+    if not 0 <= bridge_gc_max_ratio <= 1:
+        raise typer.BadParameter("bridge-gc-max-ratio must be between 0 and 1.")
+
+    config = replace(
+        CryptoTradingConfig.from_env(),
+        exchange_provider="hyperliquid",
+        hyperliquid_testnet=not mainnet,
+        lookback_limit=lookback,
+        strategy_fusion_enabled=fusion,
+        lana_strategy_enabled=lana,
+        hotlist_enabled=False,
+    )
+    if interval:
+        config = replace(config, interval=interval)
+
+    selected = tuple(item.strip().upper() for item in symbols.split(",") if item.strip())
+    bridge_config = None
+    if inventory_bridge:
+        bridge_config = BacktestInventoryBridgeConfig(
+            dead_reserve_ratio=dead_reserve_ratio,
+            max_dca_slices=inventory_dca_slices,
+            unlock_acceleration_threshold=unlock_acceleration_threshold,
+            sell_ratio=inventory_sell_ratio,
+            macro_tick_bars=bridge_macro_tick_bars,
+            ema_anchor_bars=bridge_ema_anchor_bars,
+            beta_threshold=bridge_beta_threshold,
+            moon_phase_pressure=bridge_moon_phase_pressure,
+            deadline_force_pct=bridge_deadline_force_pct,
+            gc_threshold_bars=bridge_gc_threshold_bars,
+            gc_max_ratio=bridge_gc_max_ratio,
+        )
+    report = CryptoBacktester(config).run(
+        symbols=selected,
+        bars=bars,
+        max_holding_bars=max_holding_bars,
+        fee_bps=fee_bps,
+        slippage_bps=slippage_bps,
+        inventory_bridge=bridge_config,
+    )
+
+    console.print(
+        Panel(
+            (
+                f"symbols={','.join(report.symbols)} | interval={report.interval} | "
+                f"bars={report.bars_requested} | lookback={report.lookback_limit} | "
+                f"trades={len(report.trades)}"
+            ),
+            title="Hyperliquid Historical Replay",
+            border_style="cyan",
+        )
+    )
+    summary = Table(title="Backtest Summary", box=box.SIMPLE_HEAVY)
+    summary.add_column("Metric")
+    summary.add_column("Value", justify="right")
+    summary.add_row("Signals evaluated", str(report.signals_evaluated))
+    summary.add_row("Risk rejected", str(report.risk_rejected))
+    summary.add_row("Trades", str(len(report.trades)))
+    summary.add_row("Wins", str(report.wins))
+    summary.add_row("Losses", str(report.losses))
+    summary.add_row("Win rate", f"{report.win_rate:.2%}")
+    summary.add_row("Total PnL USDT", f"{report.total_pnl_usdt:.4f}")
+    summary.add_row("Ending equity USDT", f"{report.ending_equity_usdt:.4f}")
+    summary.add_row("Total return", f"{report.total_return_pct:.2f}%")
+    summary.add_row("Max drawdown", f"{report.max_drawdown_pct:.2f}%")
+    summary.add_row("Inventory events", str(len(report.inventory_events)))
+    console.print(summary)
+
+    if report.inventory_events:
+        last_event = report.inventory_events[-1]
+        inventory = Table(title="Inventory Bridge Ledger", box=box.SIMPLE_HEAVY)
+        inventory.add_column("Metric")
+        inventory.add_column("Value", justify="right")
+        inventory.add_row(
+            "Macro buys",
+            str(sum(1 for event in report.inventory_events if event.event == "MACRO_DCA_BUY")),
+        )
+        inventory.add_row(
+            "Acceleration unlocks",
+            str(sum(1 for event in report.inventory_events if event.event == "ACCELERATION_UNLOCK")),
+        )
+        inventory.add_row(
+            "GC unlocks",
+            str(sum(1 for event in report.inventory_events if event.event == "GC_UNLOCK")),
+        )
+        inventory.add_row(
+            "LOT_SIZE rejected",
+            str(sum(1 for event in report.inventory_events if event.event == "LOT_SIZE_REJECTED")),
+        )
+        inventory.add_row(
+            "Micro sells",
+            str(sum(1 for event in report.inventory_events if event.event == "MICRO_SELL_FLOAT")),
+        )
+        inventory.add_row(
+            "Inventory PnL USDT",
+            f"{sum(event.realized_pnl_usdt for event in report.inventory_events):.4f}",
+        )
+        inventory.add_row("Ending dead qty", f"{last_event.dead_quantity:.8f}")
+        inventory.add_row("Ending float qty", f"{last_event.float_quantity:.8f}")
+        inventory.add_row("Ending quote USDT", f"{last_event.quote_balance_usdt:.4f}")
+        console.print(inventory)
+
+    trades = Table(title="Recent Simulated Trades", box=box.SIMPLE_HEAVY)
+    trades.add_column("Symbol", style="bold")
+    trades.add_column("Outcome")
+    trades.add_column("Entry", justify="right")
+    trades.add_column("Exit", justify="right")
+    trades.add_column("Qty", justify="right")
+    trades.add_column("PnL", justify="right")
+    trades.add_column("PnL %", justify="right")
+    trades.add_column("Bars", justify="right")
+    trades.add_column("Confidence", justify="right")
+    for trade in report.trades[-15:]:
+        pnl_style = "green" if trade.pnl_usdt > 0 else "red"
+        trades.add_row(
+            trade.symbol,
+            trade.outcome,
+            f"{trade.entry_price:.4f}",
+            f"{trade.exit_price:.4f}",
+            f"{trade.quantity:.6f}",
+            f"[{pnl_style}]{trade.pnl_usdt:.4f}[/{pnl_style}]",
+            f"{trade.pnl_pct:.2f}%",
+            str(trade.holding_bars),
+            f"{trade.confidence:.2f}",
+        )
+    console.print(trades)
+
+
+def _parse_text_tuple(raw: str, option_name: str) -> tuple[str, ...]:
+    items = tuple(item.strip() for item in raw.split(",") if item.strip())
+    if not items:
+        raise typer.BadParameter(f"{option_name} must include at least one value.")
+    return items
+
+
+def _parse_int_tuple(raw: str, option_name: str) -> tuple[int, ...]:
+    values: list[int] = []
+    for item in raw.split(","):
+        stripped = item.strip()
+        if not stripped:
+            continue
+        try:
+            values.append(int(stripped))
+        except ValueError as exc:
+            raise typer.BadParameter(f"{option_name} contains a non-integer value: {stripped}") from exc
+    if not values:
+        raise typer.BadParameter(f"{option_name} must include at least one value.")
+    return tuple(values)
+
+
+def _backtest_sweep_rows(sweep_report, candidate_rules=None):
+    rows = []
+    for rank, result in enumerate(sweep_report.ranked_results, start=1):
+        case = result.case
+        report = result.report
+        decision = result.evaluate_candidate(candidate_rules)
+        rows.append(
+            {
+                "rank": rank,
+                "candidate": "yes" if decision.approved else "no",
+                "reject_reasons": "; ".join(decision.reasons),
+                "symbols": ",".join(report.symbols),
+                "interval": case.interval,
+                "lookback": case.lookback_limit,
+                "max_holding_bars": case.max_holding_bars,
+                "bars": report.bars_requested,
+                "signals_evaluated": report.signals_evaluated,
+                "risk_rejected": report.risk_rejected,
+                "trades": len(report.trades),
+                "wins": report.wins,
+                "losses": report.losses,
+                "max_consecutive_losses": report.max_consecutive_losses,
+                "win_rate": f"{report.win_rate:.6f}",
+                "total_pnl_usdt": f"{report.total_pnl_usdt:.6f}",
+                "total_return_pct": f"{report.total_return_pct:.6f}",
+                "max_drawdown_pct": f"{report.max_drawdown_pct:.6f}",
+                "risk_adjusted_score": f"{result.risk_adjusted_score:.6f}",
+                "fee_bps": case.fee_bps,
+                "slippage_bps": case.slippage_bps,
+                "fusion_enabled": case.fusion_enabled,
+                "lana_enabled": case.lana_enabled,
+            }
+        )
+    return rows
+
+
+def _write_backtest_sweep_csv(path: Path, sweep_report, candidate_rules=None) -> None:
+    rows = _backtest_sweep_rows(sweep_report, candidate_rules)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fieldnames = list(rows[0].keys()) if rows else [
+        "rank",
+        "candidate",
+        "reject_reasons",
+        "symbols",
+        "interval",
+        "lookback",
+        "max_holding_bars",
+        "bars",
+        "signals_evaluated",
+        "risk_rejected",
+        "trades",
+        "wins",
+        "losses",
+        "max_consecutive_losses",
+        "win_rate",
+        "total_pnl_usdt",
+        "total_return_pct",
+        "max_drawdown_pct",
+        "risk_adjusted_score",
+        "fee_bps",
+        "slippage_bps",
+        "fusion_enabled",
+        "lana_enabled",
+    ]
+    with path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(rows)
+
+
+def _write_backtest_sweep_markdown(path: Path, sweep_report, top: int, candidate_rules=None) -> None:
+    rows = _backtest_sweep_rows(sweep_report, candidate_rules)[:top]
+    path.parent.mkdir(parents=True, exist_ok=True)
+    candidate_count = len(sweep_report.candidate_results(candidate_rules))
+    lines = [
+        "# Hyperliquid Backtest Sweep",
+        "",
+        f"- Symbols: {', '.join(sweep_report.symbols)}",
+        f"- Bars per symbol: {sweep_report.bars_requested}",
+        f"- Cases tested: {len(sweep_report.results)}",
+        f"- Paper candidates: {candidate_count}",
+        "",
+        "| Rank | Candidate | Interval | Lookback | Hold bars | Trades | Win rate | Return | Max DD | Loss streak | PnL USDT | Score | Reject reasons |",
+        "| ---: | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |",
+    ]
+    for row in rows:
+        lines.append(
+            "| {rank} | {candidate} | {interval} | {lookback} | {max_holding_bars} | {trades} | "
+            "{win_rate:.2%} | {total_return_pct:.2f}% | {max_drawdown_pct:.2f}% | "
+            "{max_consecutive_losses} | {total_pnl_usdt:.4f} | {risk_adjusted_score:.4f} | "
+            "{reject_reasons} |".format(
+                rank=row["rank"],
+                candidate=row["candidate"],
+                interval=row["interval"],
+                lookback=row["lookback"],
+                max_holding_bars=row["max_holding_bars"],
+                trades=row["trades"],
+                win_rate=float(row["win_rate"]),
+                total_return_pct=float(row["total_return_pct"]),
+                max_drawdown_pct=float(row["max_drawdown_pct"]),
+                max_consecutive_losses=row["max_consecutive_losses"],
+                total_pnl_usdt=float(row["total_pnl_usdt"]),
+                risk_adjusted_score=float(row["risk_adjusted_score"]),
+                reject_reasons=row["reject_reasons"] or "-",
+            )
+        )
+    lines.extend(
+        [
+            "",
+            "Notes:",
+            "",
+            "- This is a historical candle replay only.",
+            "- It does not call the execution router or place orders.",
+            "- The score is return percent minus max drawdown, scaled down when a case has fewer than five trades.",
+            "- A paper candidate only means the case passed deterministic historical filters.",
+        ]
+    )
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def _write_evolution_report(base_path: Path, report, top: int) -> tuple[Path, Path, Path]:
+    from tradingagents.crypto import (
+        evolution_html_output_path,
+        evolution_output_paths,
+        render_evolution_record_html,
+    )
+
+    json_path, markdown_path = evolution_output_paths(base_path)
+    html_path = evolution_html_output_path(base_path)
+    json_path.parent.mkdir(parents=True, exist_ok=True)
+    json_path.write_text(
+        json.dumps(report.to_dict(), ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    markdown_path.write_text(report.render_markdown(top=top), encoding="utf-8")
+    record = {
+        "candidate_id": report.challenger.candidate_id,
+        "status": "challenger",
+        "created_at": report.created_at,
+        "promoted_at": None,
+        "retired_at": None,
+        "symbols": list(report.symbols),
+        "interval": report.interval,
+        "bars_requested": report.bars_requested,
+        "population_size": report.population_size,
+        "generations": report.generations,
+        "seed": report.seed,
+        "score": report.challenger.score.to_dict(),
+        "generation_history": [item.to_dict() for item in report.generation_history],
+        "crucible_windows": [item.to_dict() for item in report.crucible_windows],
+        "population_plan": (
+            report.population_plan.to_dict() if report.population_plan is not None else {}
+        ),
+        "run_context": dict(report.run_context),
+        "candidate": report.challenger.to_dict(),
+    }
+    html_path.write_text(render_evolution_record_html(record), encoding="utf-8")
+    return json_path, markdown_path, html_path
+
+
+def _load_runtime_champion_or_default(
+    config,
+    mode: str,
+    enabled: bool,
+    season: str,
+    archive_path: Optional[Path],
+    symbols: tuple[str, ...] | None = None,
+):
+    if not enabled:
+        return config, None
+    if mode not in {"analysis", "paper"}:
+        raise typer.BadParameter("evolution champion packages can only be loaded in analysis or paper mode.")
+
+    from dataclasses import replace as dataclass_replace
+
+    from tradingagents.crypto import EvolutionArchiveStore, RegimeEngine, load_runtime_champion_config
+
+    store = EvolutionArchiveStore(config, archive_path)
+    if store.current_champion() is None:
+        console.print("[yellow]No evolution champion found; using built-in runtime defaults.[/yellow]")
+        return config, None
+
+    season_source = "manual"
+    regime_assessment = None
+    resolved_season = season.strip().lower()
+    if resolved_season == "auto":
+        try:
+            regime_assessment = RegimeEngine(config).assess(
+                symbols=symbols or config.symbols,
+                interval=config.interval,
+                bars=max(96, config.lookback_limit),
+            )
+        except (RuntimeError, ValueError) as exc:
+            raise typer.BadParameter(f"auto champion season failed: {exc}") from exc
+        resolved_season = regime_assessment.season
+        season_source = "regime"
+
+    try:
+        application = load_runtime_champion_config(
+            config,
+            archive_path=archive_path,
+            season=resolved_season,
+        )
+    except ValueError as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    if application is None:
+        console.print("[yellow]No evolution champion found; using built-in runtime defaults.[/yellow]")
+        return config, None
+    if regime_assessment is not None:
+        application = dataclass_replace(
+            application,
+            season_source=season_source,
+            regime_assessment=regime_assessment.to_dict(),
+        )
+    return application.config, application
+
+
+def _champion_loaded_message(application) -> str:
+    message = (
+        f"[green]Evolution champion loaded:[/green] {application.candidate_id} "
+        f"season={application.season} source={application.season_source} "
+        f"params={application.parameter_source} "
+        f"settings={application.applied_settings}"
+    )
+    assessment = application.regime_assessment
+    if isinstance(assessment, dict):
+        message += (
+            f" regime_score={float(assessment.get('heat_score', 0.0)):.4f} "
+            f"regime_confidence={float(assessment.get('confidence', 0.0)):.2%}"
+        )
+    return message
+
+
+@app.command("crypto-evolution-preset")
+def crypto_evolution_preset(
+    input_preset: Optional[Path] = typer.Option(
+        None,
+        "--input",
+        help="Optional existing preset JSON to validate and preview.",
+    ),
+    output: Optional[Path] = typer.Option(
+        None,
+        "--output",
+        help="Optional JSON path to write a normalized editable evolution preset.",
+    ),
+    markdown_output: Optional[Path] = typer.Option(
+        None,
+        "--markdown-output",
+        help="Optional path to write the launch-state Markdown preview.",
+    ),
+    html_output: Optional[Path] = typer.Option(
+        None,
+        "--html-output",
+        help="Optional path to write the editable launch-state HTML window.",
+    ),
+):
+    """Show, validate, and optionally write the editable pre-evolution parameter state."""
+
+    from tradingagents.crypto import (
+        evolution_preset_sections,
+        evolution_preset_template,
+        render_evolution_preset_html,
+        render_evolution_preset_markdown,
+        validate_evolution_preset,
+    )
+
+    lab_preset = None
+    validation = None
+    if input_preset is not None:
+        try:
+            validation = validate_evolution_preset(input_preset)
+        except ValueError as exc:
+            raise typer.BadParameter(str(exc)) from exc
+        lab_preset = validation.preset
+    sections = evolution_preset_sections(lab_preset)
+    console.print(
+        Panel(
+            (
+                "Review or edit this state before passing it to "
+                "crypto-evolve with --preset."
+            ),
+            title="Evolution Preset Template",
+            border_style="cyan",
+        )
+    )
+    if input_preset is not None:
+        console.print(f"[green]Preset input loaded:[/green] {input_preset}")
+    if validation is not None:
+        _print_evolution_preset_validation(validation)
+    _print_evolution_launch_sections(sections)
+
+    if output is not None:
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(
+            json.dumps(evolution_preset_template(lab_preset), ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        console.print(f"[green]Evolution preset written:[/green] {output}")
+    if markdown_output is not None:
+        markdown_output.parent.mkdir(parents=True, exist_ok=True)
+        markdown_output.write_text(render_evolution_preset_markdown(lab_preset), encoding="utf-8")
+        console.print(f"[green]Launch Markdown written:[/green] {markdown_output}")
+    if html_output is not None:
+        html_output.parent.mkdir(parents=True, exist_ok=True)
+        html_output.write_text(render_evolution_preset_html(lab_preset), encoding="utf-8")
+        console.print(f"[green]Launch HTML written:[/green] {html_output}")
+
+
+@app.command("crypto-backtest-sweep")
+def crypto_backtest_sweep(
+    symbols: str = typer.Option(
+        "BTC,ETH,SOL,HYPE",
+        "--symbols",
+        help="Comma-separated Hyperliquid coins to replay.",
+    ),
+    mainnet: bool = typer.Option(
+        True,
+        "--mainnet/--testnet",
+        help="Use mainnet public candles or testnet public candles.",
+    ),
+    intervals: str = typer.Option(
+        "5m,15m,1h",
+        "--intervals",
+        help="Comma-separated kline intervals to compare.",
+    ),
+    bars: int = typer.Option(
+        500,
+        "--bars",
+        help="Historical candles to request per symbol per case.",
+    ),
+    lookbacks: str = typer.Option(
+        "60,120",
+        "--lookbacks",
+        help="Comma-separated rolling lookback values.",
+    ),
+    max_holding_bars: str = typer.Option(
+        "16,32,48",
+        "--max-holding-bars",
+        help="Comma-separated maximum holding bars to compare.",
+    ),
+    fee_bps: float = typer.Option(
+        4.0,
+        "--fee-bps",
+        help="Taker fee bps charged on entry and exit.",
+    ),
+    slippage_bps: float = typer.Option(
+        2.0,
+        "--slippage-bps",
+        help="Adverse slippage bps applied to entry and exit fills.",
+    ),
+    fusion: bool = typer.Option(
+        True,
+        "--fusion/--no-fusion",
+        help="Enable or disable strategy fusion during replay.",
+    ),
+    lana: bool = typer.Option(
+        False,
+        "--lana/--no-lana",
+        help="Enable Lana-inspired hot-mover logic during replay.",
+    ),
+    top: int = typer.Option(
+        10,
+        "--top",
+        help="Number of ranked cases to print and include in Markdown.",
+    ),
+    min_trades: int = typer.Option(
+        5,
+        "--min-trades",
+        help="Minimum simulated trades required for a paper candidate.",
+    ),
+    min_win_rate: float = typer.Option(
+        0.40,
+        "--min-win-rate",
+        help="Minimum win rate required for a paper candidate, e.g. 0.40.",
+    ),
+    min_return_pct: float = typer.Option(
+        0.0,
+        "--min-return-pct",
+        help="Minimum total return percent required for a paper candidate.",
+    ),
+    max_drawdown_pct: float = typer.Option(
+        5.0,
+        "--max-drawdown-pct",
+        help="Maximum drawdown percent allowed for a paper candidate.",
+    ),
+    max_consecutive_losses: int = typer.Option(
+        3,
+        "--max-consecutive-losses",
+        help="Maximum loss streak allowed for a paper candidate.",
+    ),
+    candidates_only: bool = typer.Option(
+        False,
+        "--candidates-only/--all-results",
+        help="Print only cases that pass the paper-candidate filters.",
+    ),
+    csv_output: Optional[Path] = typer.Option(
+        None,
+        "--csv-output",
+        help="Optional CSV output path for all cases.",
+    ),
+    markdown_output: Optional[Path] = typer.Option(
+        None,
+        "--markdown-output",
+        help="Optional Markdown output path for the ranked summary.",
+    ),
+):
+    """Compare multiple Hyperliquid replay parameter sets."""
+
+    from dataclasses import replace
+
+    from tradingagents.crypto import (
+        BacktestCandidateRules,
+        CryptoBacktestSweepRunner,
+        CryptoTradingConfig,
+    )
+
+    selected = tuple(item.upper() for item in _parse_text_tuple(symbols, "--symbols"))
+    interval_options = _parse_text_tuple(intervals, "--intervals")
+    lookback_options = _parse_int_tuple(lookbacks, "--lookbacks")
+    holding_options = _parse_int_tuple(max_holding_bars, "--max-holding-bars")
+    if any(lookback < 60 for lookback in lookback_options):
+        raise typer.BadParameter("all lookbacks must be at least 60 for the scanner.")
+    if any(holding < 1 for holding in holding_options):
+        raise typer.BadParameter("all max-holding-bars values must be at least 1.")
+    if bars <= max(lookback_options) + 2:
+        raise typer.BadParameter("bars must be greater than the largest lookback plus 2.")
+    if top < 1:
+        raise typer.BadParameter("top must be at least 1.")
+    if min_trades < 1:
+        raise typer.BadParameter("min-trades must be at least 1.")
+    if not 0 <= min_win_rate <= 1:
+        raise typer.BadParameter("min-win-rate must be between 0 and 1.")
+    if max_drawdown_pct < 0:
+        raise typer.BadParameter("max-drawdown-pct must be non-negative.")
+    if max_consecutive_losses < 0:
+        raise typer.BadParameter("max-consecutive-losses must be non-negative.")
+
+    config = replace(
+        CryptoTradingConfig.from_env(),
+        exchange_provider="hyperliquid",
+        hyperliquid_testnet=not mainnet,
+        interval=interval_options[0],
+        lookback_limit=lookback_options[0],
+        strategy_fusion_enabled=fusion,
+        lana_strategy_enabled=lana,
+        hotlist_enabled=False,
+    )
+    sweep_report = CryptoBacktestSweepRunner(config).run(
+        symbols=selected,
+        intervals=interval_options,
+        lookbacks=lookback_options,
+        max_holding_bars_options=holding_options,
+        bars=bars,
+        fee_bps=fee_bps,
+        slippage_bps=slippage_bps,
+        fusion_enabled=fusion,
+        lana_enabled=lana,
+    )
+    candidate_rules = BacktestCandidateRules(
+        min_trades=min_trades,
+        min_win_rate=min_win_rate,
+        min_total_return_pct=min_return_pct,
+        max_drawdown_pct=max_drawdown_pct,
+        max_consecutive_losses=max_consecutive_losses,
+    )
+    candidate_results = sweep_report.candidate_results(candidate_rules)
+    display_results = candidate_results if candidates_only else sweep_report.ranked_results
+
+    best = sweep_report.best_candidate(candidate_rules) or sweep_report.best_result
+    best_line = "none"
+    if best is not None:
+        best_line = (
+            f"{best.case.interval} lookback={best.case.lookback_limit} "
+            f"hold={best.case.max_holding_bars} score={best.risk_adjusted_score:.4f}"
+        )
+    console.print(
+        Panel(
+            (
+                f"symbols={','.join(sweep_report.symbols)} | bars={sweep_report.bars_requested} | "
+                f"cases={len(sweep_report.results)} | candidates={len(candidate_results)} | best={best_line}"
+            ),
+            title="Hyperliquid Backtest Sweep",
+            border_style="cyan",
+        )
+    )
+
+    table_title = f"Top {min(top, len(display_results))} Sweep Results"
+    if candidates_only:
+        table_title = f"Top {min(top, len(display_results))} Paper Candidates"
+    table = Table(title=table_title, box=box.SIMPLE_HEAVY)
+    table.add_column("Rank", justify="right")
+    table.add_column("Cand")
+    table.add_column("Interval")
+    table.add_column("Lookback", justify="right")
+    table.add_column("Hold", justify="right")
+    table.add_column("Trades", justify="right")
+    table.add_column("Win", justify="right")
+    table.add_column("Return", justify="right")
+    table.add_column("Max DD", justify="right")
+    table.add_column("Loss Streak", justify="right")
+    table.add_column("PnL", justify="right")
+    table.add_column("Score", justify="right")
+    for rank, result in enumerate(display_results[:top], start=1):
+        case = result.case
+        report = result.report
+        decision = result.evaluate_candidate(candidate_rules)
+        pnl_style = "green" if report.total_pnl_usdt > 0 else "red"
+        table.add_row(
+            str(rank),
+            "[green]yes[/green]" if decision.approved else "[red]no[/red]",
+            case.interval,
+            str(case.lookback_limit),
+            str(case.max_holding_bars),
+            str(len(report.trades)),
+            f"{report.win_rate:.2%}",
+            f"{report.total_return_pct:.2f}%",
+            f"{report.max_drawdown_pct:.2f}%",
+            str(report.max_consecutive_losses),
+            f"[{pnl_style}]{report.total_pnl_usdt:.4f}[/{pnl_style}]",
+            f"{result.risk_adjusted_score:.4f}",
+        )
+    console.print(table)
+    if candidates_only and not display_results:
+        console.print(
+            Panel(
+                (
+                    "No cases passed the paper-candidate filters. "
+                    "Inspect the CSV/Markdown output or loosen thresholds only for research."
+                ),
+                title="Candidate Filters",
+                border_style="yellow",
+            )
+        )
+
+    if csv_output is not None:
+        _write_backtest_sweep_csv(csv_output, sweep_report, candidate_rules)
+        console.print(f"[green]CSV written:[/green] {csv_output}")
+    if markdown_output is not None:
+        _write_backtest_sweep_markdown(markdown_output, sweep_report, top, candidate_rules)
+        console.print(f"[green]Markdown written:[/green] {markdown_output}")
+
+
+@app.command("crypto-evolve")
+def crypto_evolve(
+    symbols: str = typer.Option(
+        "BTC,ETH,SOL,HYPE",
+        "--symbols",
+        help="Comma-separated Hyperliquid coins to evolve against.",
+    ),
+    mainnet: bool = typer.Option(
+        True,
+        "--mainnet/--testnet",
+        help="Use mainnet public candles or testnet public candles.",
+    ),
+    interval: str = typer.Option(
+        "5m",
+        "--interval",
+        help="Kline interval for the evolution lab replay.",
+    ),
+    bars: int = typer.Option(
+        1000,
+        "--bars",
+        help="Historical candles to request per symbol.",
+    ),
+    population: int = typer.Option(
+        10,
+        "--population",
+        help="Population size for the research-only GA loop.",
+    ),
+    generations: int = typer.Option(
+        3,
+        "--generations",
+        help="Generation count for the research-only GA loop.",
+    ),
+    seed: Optional[int] = typer.Option(
+        None,
+        "--seed",
+        help="Optional deterministic random seed.",
+    ),
+    fee_bps: float = typer.Option(
+        20.0,
+        "--fee-bps",
+        help="Pessimistic taker fee bps charged on entry and exit.",
+    ),
+    slippage_bps: float = typer.Option(
+        2.0,
+        "--slippage-bps",
+        help="Adverse slippage bps applied to entry and exit fills.",
+    ),
+    monte_carlo_simulations: int = typer.Option(
+        250,
+        "--monte-carlo-simulations",
+        help="Monte Carlo paths for the final challenger review.",
+    ),
+    top: int = typer.Option(
+        10,
+        "--top",
+        help="Number of ranked candidates to display and write to Markdown.",
+    ),
+    output: Optional[Path] = typer.Option(
+        None,
+        "--output",
+        help="Optional output base path. Writes .json, .md, and .html challenger reports.",
+    ),
+    preset: Optional[Path] = typer.Option(
+        None,
+        "--preset",
+        help="Optional editable evolution preset JSON from crypto-evolution-preset.",
+    ),
+    archive: bool = typer.Option(
+        True,
+        "--archive/--no-archive",
+        help="Write the challenger into the local evolution archive.",
+    ),
+    archive_path: Optional[Path] = typer.Option(
+        None,
+        "--archive-path",
+        help="Optional evolution archive JSON path.",
+    ),
+    archive_seeds: bool = typer.Option(
+        True,
+        "--archive-seeds/--no-archive-seeds",
+        help="Inject champion/challenger genomes from the archive into the initial population.",
+    ),
+    job_index: bool = typer.Option(
+        True,
+        "--job-index/--no-job-index",
+        help="Record this completed evolution run in the local job ledger.",
+    ),
+    job_index_path: Optional[Path] = typer.Option(
+        None,
+        "--job-index-path",
+        help="Optional evolution job ledger JSON path.",
+    ),
+):
+    """Run the research-only crypto evolution lab and emit a challenger package."""
+
+    from dataclasses import replace
+
+    from tradingagents.crypto import (
+        CryptoEvolutionRunner,
+        CryptoTradingConfig,
+        EvolutionArchiveStore,
+        EvolutionRunStore,
+        evolution_preset_sections,
+        load_archive_elite_genomes,
+        load_archive_environment_anchor,
+        validate_evolution_preset,
+    )
+
+    selected = tuple(item.upper() for item in _parse_text_tuple(symbols, "--symbols"))
+    if bars < 260:
+        raise typer.BadParameter("bars must be at least 260 so four season slices have history.")
+    if population < 4:
+        raise typer.BadParameter("population must be at least 4.")
+    if generations < 1:
+        raise typer.BadParameter("generations must be at least 1.")
+    if fee_bps < 0:
+        raise typer.BadParameter("fee-bps must be non-negative.")
+    if slippage_bps < 0:
+        raise typer.BadParameter("slippage-bps must be non-negative.")
+    if monte_carlo_simulations < 1:
+        raise typer.BadParameter("monte-carlo-simulations must be at least 1.")
+    if top < 1:
+        raise typer.BadParameter("top must be at least 1.")
+
+    config = replace(
+        CryptoTradingConfig.from_env(),
+        exchange_provider="hyperliquid",
+        hyperliquid_testnet=not mainnet,
+        interval=interval,
+        hyperliquid_max_leverage=1,
+        lana_strategy_enabled=False,
+        hotlist_enabled=False,
+    )
+    lab_preset = None
+    validation = None
+    if preset is not None:
+        try:
+            validation = validate_evolution_preset(preset)
+        except ValueError as exc:
+            raise typer.BadParameter(str(exc)) from exc
+        lab_preset = validation.preset
+        console.print(
+            Panel(
+                f"preset={preset}",
+                title="Pre-Evolution Launch State",
+                border_style="cyan",
+            )
+        )
+        _print_evolution_preset_validation(validation)
+        _print_evolution_launch_sections(evolution_preset_sections(lab_preset))
+    elite_seed_genomes = ()
+    environment_anchor = None
+    if archive_seeds:
+        elite_seed_genomes = load_archive_elite_genomes(config, archive_path)
+        environment_anchor = load_archive_environment_anchor(config, archive_path)
+        if environment_anchor is not None:
+            console.print(
+                "[green]Environment anchor:[/green] current champion "
+                f"dead_reserve_ratio={environment_anchor.dead_reserve_ratio:.4f} "
+                f"global_stop_loss={environment_anchor.global_stop_loss:.4f}"
+            )
+    pre_run_context = {
+        "fee_bps": fee_bps,
+        "slippage_bps": slippage_bps,
+        "monte_carlo_simulations": monte_carlo_simulations,
+        "cli": {
+            "mainnet": mainnet,
+            "archive_enabled": archive,
+            "archive_path": str(archive_path or config.state_dir / "evolution_archive.json"),
+            "archive_seeds_enabled": archive_seeds,
+            "environment_anchor_loaded": environment_anchor is not None,
+            "output_base": str(output) if output is not None else None,
+            "job_index_enabled": job_index,
+            "job_index_path": str(job_index_path or config.state_dir / "evolution_runs.json"),
+        },
+        "preset": {
+            "path": str(preset) if preset is not None else None,
+            "used": validation is not None,
+            "ok": validation.ok if validation is not None else None,
+            "defaults_used": list(validation.defaults_used) if validation is not None else [],
+            "projected_fields": list(validation.projected_fields) if validation is not None else [],
+            "warnings": list(validation.warnings) if validation is not None else [],
+        },
+    }
+    run_store = EvolutionRunStore(config, job_index_path) if job_index else None
+    started_run_id = None
+    if run_store is not None:
+        started = run_store.record_started(
+            symbols=selected,
+            interval=config.interval,
+            bars_requested=bars,
+            population_size=population,
+            generations=generations,
+            seed=seed,
+            run_context=pre_run_context,
+        )
+        started_run_id = str(started["run_id"])
+        console.print(f"[green]Evolution job started:[/green] {started_run_id} -> {run_store.path}")
+    try:
+        report = CryptoEvolutionRunner(config).run(
+            symbols=selected,
+            bars=bars,
+            population_size=population,
+            generations=generations,
+            seed=seed,
+            fee_bps=fee_bps,
+            slippage_bps=slippage_bps,
+            environment=lab_preset.environment if lab_preset else None,
+            environment_anchor=environment_anchor,
+            season_regime=lab_preset.season_regime if lab_preset else None,
+            seed_genome=lab_preset.seed_genome if lab_preset else None,
+            elite_seed_genomes=elite_seed_genomes,
+            monte_carlo_simulations=monte_carlo_simulations,
+        )
+    except Exception as exc:
+        if run_store is not None and started_run_id is not None:
+            run_store.record_failed(
+                started_run_id,
+                error=str(exc),
+                error_type=type(exc).__name__,
+                run_context=pre_run_context,
+            )
+            console.print(f"[red]Evolution job failed:[/red] {started_run_id} -> {run_store.path}")
+        raise
+    run_context = dict(report.run_context)
+    run_context.update(
+        {
+            "cli": pre_run_context["cli"],
+            "preset": pre_run_context["preset"],
+        }
+    )
+    report = replace(report, run_context=run_context)
+    challenger = report.challenger
+    score = challenger.score
+
+    console.print(
+        Panel(
+            (
+                f"symbols={','.join(report.symbols)} | interval={report.interval} | "
+                f"bars={report.bars_requested} | population={report.population_size} | "
+                f"generations={report.generations} | challenger={challenger.candidate_id}"
+            ),
+            title="Hyperliquid Evolution Lab",
+            border_style="cyan",
+        )
+    )
+    if lab_preset is not None:
+        loaded_parts = [
+            name
+            for name, value in (
+                ("environment", lab_preset.environment),
+                ("season_regime", lab_preset.season_regime),
+                ("seed_genome", lab_preset.seed_genome),
+            )
+            if value is not None
+        ]
+        console.print(
+            f"[green]Evolution preset loaded:[/green] {preset} "
+            f"parts={','.join(loaded_parts) or '-'}"
+        )
+    if archive_seeds:
+        console.print(
+            f"[green]Archive elite seeds:[/green] {len(elite_seed_genomes)} "
+            f"from {archive_path or config.state_dir / 'evolution_archive.json'}"
+        )
+    if report.population_plan is not None:
+        plan = report.population_plan
+        population_table = Table(title="Initial Population 1-4-5 Mix", box=box.SIMPLE_HEAVY)
+        population_table.add_column("Source")
+        population_table.add_column("Count", justify="right")
+        population_table.add_column("Ratio", justify="right")
+        population_table.add_row(
+            "Incumbent elites",
+            str(plan.incumbent_elites),
+            f"{plan.incumbent_ratio:.2%}",
+        )
+        population_table.add_row(
+            "Targeted mutants",
+            str(plan.targeted_mutants),
+            f"{plan.targeted_mutant_ratio:.2%}",
+        )
+        population_table.add_row("Explorers", str(plan.explorers), f"{plan.explorer_ratio:.2%}")
+        population_table.add_row("Seed pool", str(plan.seed_pool_size), "-")
+        population_table.add_row("Archive elite seeds", str(plan.elite_seed_count), "-")
+        console.print(population_table)
+    summary = Table(title="Challenger Score", box=box.SIMPLE_HEAVY)
+    summary.add_column("Metric")
+    summary.add_column("Value", justify="right")
+    summary.add_row("Score", f"{score.score:.4f}")
+    summary.add_row("Alpha vs Ghost DCA", f"{score.alpha_pct:.2f}%")
+    summary.add_row("Realized PnL USDT", f"{score.realized_pnl_usdt:.4f}")
+    summary.add_row("Fee friction", f"{score.fee_friction_pct:.2f}%")
+    summary.add_row("Max drawdown", f"{score.max_drawdown_pct:.2f}%")
+    summary.add_row("Trades", str(score.trades))
+    summary.add_row("Win rate", f"{score.win_rate:.2%}")
+    summary.add_row("Risk rejected", str(score.risk_rejected))
+    summary.add_row("Inventory events", str(score.inventory_event_count))
+    summary.add_row("Inventory rejected", str(score.inventory_rejected))
+    summary.add_row("Inventory PnL USDT", f"{score.inventory_realized_pnl_usdt:.4f}")
+    console.print(summary)
+
+    if challenger.final_review is not None:
+        review = challenger.final_review
+        mc = review.monte_carlo
+        final_review = Table(title="Final Full-Sample Review", box=box.SIMPLE_HEAVY)
+        final_review.add_column("Metric")
+        final_review.add_column("Value", justify="right")
+        final_review.add_row("Alpha", f"{review.alpha_pct:.2f}%")
+        final_review.add_row("Return", f"{review.total_return_pct:.2f}%")
+        final_review.add_row("Max drawdown", f"{review.max_drawdown_pct:.2f}%")
+        final_review.add_row("Trades", str(review.trades))
+        final_review.add_row("Inventory events", str(review.inventory_bridge.event_count))
+        final_review.add_row("Inventory micro sells", str(review.inventory_bridge.micro_sells))
+        final_review.add_row("Inventory PnL USDT", f"{review.inventory_bridge.realized_pnl_usdt:.4f}")
+        final_review.add_row("MC P05 return", f"{mc.return_p05_pct:.2f}%")
+        final_review.add_row("MC P50 return", f"{mc.return_p50_pct:.2f}%")
+        final_review.add_row("MC P95 return", f"{mc.return_p95_pct:.2f}%")
+        final_review.add_row("MC bankruptcy", f"{mc.bankruptcy_probability:.2%}")
+        final_review.add_row("MC stop-loss breach", f"{mc.stop_loss_breach_probability:.2%}")
+        final_review.add_row("Warnings", ", ".join(review.warnings) or "-")
+        console.print(final_review)
+
+    if report.generation_history:
+        history = Table(title="Generation History", box=box.SIMPLE_HEAVY)
+        history.add_column("Gen", justify="right")
+        history.add_column("Best", justify="right")
+        history.add_column("Avg", justify="right")
+        history.add_column("Mut Prob", justify="right")
+        history.add_column("Mut Scale", justify="right")
+        history.add_column("Stale", justify="right")
+        history.add_column("Improved")
+        for item in report.generation_history:
+            history.add_row(
+                str(item.generation),
+                f"{item.best_score:.4f}",
+                f"{item.average_score:.4f}",
+                f"{item.mutation_probability:.3f}",
+                f"{item.mutation_scale:.3f}",
+                str(item.stale_generations),
+                "yes" if item.improved else "no",
+            )
+        console.print(history)
+
+    if report.crucible_windows:
+        windows = Table(title="Crucible Windows", box=box.SIMPLE_HEAVY)
+        windows.add_column("Window")
+        windows.add_column("Weight", justify="right")
+        windows.add_column("Bars", justify="right")
+        windows.add_column("Start")
+        windows.add_column("End")
+        for item in report.crucible_windows:
+            windows.add_row(
+                item.name,
+                f"{item.weight:.2f}",
+                str(item.bars),
+                item.start_time or "-",
+                item.end_time or "-",
+            )
+        console.print(windows)
+
+    seasons = Table(title="Crucible Window / Season Friction", box=box.SIMPLE_HEAVY)
+    seasons.add_column("Season")
+    seasons.add_column("Multiplier", justify="right")
+    seasons.add_column("Score", justify="right")
+    seasons.add_column("Alpha", justify="right")
+    seasons.add_column("Trades", justify="right")
+    seasons.add_column("Inv PnL", justify="right")
+    for season_score in score.seasons:
+        seasons.add_row(
+            season_score.name,
+            f"{season_score.aggressiveness_multiplier:.2f}",
+            f"{season_score.score:.4f}",
+            f"{season_score.alpha_pct:.2f}%",
+            str(season_score.trades),
+            f"{season_score.inventory_realized_pnl_usdt:.4f}",
+        )
+    console.print(seasons)
+
+    genome = challenger.genome
+    genes = Table(title="Challenger LunarGenome", box=box.SIMPLE_HEAVY)
+    genes.add_column("Gene")
+    genes.add_column("Value", justify="right")
+    for name, value in genome.to_dict().items():
+        genes.add_row(name, f"{value:.6f}" if isinstance(value, float) else str(value))
+    console.print(genes)
+
+    ranked = Table(title=f"Top {min(top, len(report.ranked_candidates))} Candidates", box=box.SIMPLE_HEAVY)
+    ranked.add_column("Rank", justify="right")
+    ranked.add_column("Candidate")
+    ranked.add_column("Score", justify="right")
+    ranked.add_column("Alpha", justify="right")
+    ranked.add_column("Max DD", justify="right")
+    ranked.add_column("Trades", justify="right")
+    for rank, candidate in enumerate(report.ranked_candidates[:top], start=1):
+        candidate_score = candidate.score
+        ranked.add_row(
+            str(rank),
+            candidate.candidate_id,
+            f"{candidate_score.score:.4f}",
+            f"{candidate_score.alpha_pct:.2f}%",
+            f"{candidate_score.max_drawdown_pct:.2f}%",
+            str(candidate_score.trades),
+        )
+    console.print(ranked)
+
+    output_paths = {}
+    if output is not None:
+        json_path, markdown_path, html_path = _write_evolution_report(output, report, top)
+        output_paths = {
+            "json": str(json_path),
+            "markdown": str(markdown_path),
+            "html": str(html_path),
+        }
+        console.print(f"[green]Evolution JSON written:[/green] {json_path}")
+        console.print(f"[green]Evolution Markdown written:[/green] {markdown_path}")
+        console.print(f"[green]Evolution HTML written:[/green] {html_path}")
+    archive_record = None
+    archive_store_path = archive_path or config.state_dir / "evolution_archive.json"
+    if archive:
+        store = EvolutionArchiveStore(config, archive_path)
+        archive_store_path = store.path
+        archive_record = store.save_challenger(report)
+        console.print(
+            f"[green]Challenger archived:[/green] {archive_record['candidate_id']} -> {store.path}"
+        )
+    if job_index:
+        if run_store is None:
+            run_store = EvolutionRunStore(config, job_index_path)
+        run_record = run_store.record_completed(
+            report,
+            output_paths=output_paths,
+            archive_path=archive_store_path if archive else None,
+            archived_candidate_id=archive_record["candidate_id"] if archive_record else None,
+            run_id=started_run_id,
+        )
+        console.print(f"[green]Evolution job recorded:[/green] {run_record['run_id']} -> {run_store.path}")
+
+
+@app.command("crypto-evolution-archive")
+def crypto_evolution_archive(
+    archive_path: Optional[Path] = typer.Option(
+        None,
+        "--archive-path",
+        help="Optional evolution archive JSON path.",
+    ),
+    limit: int = typer.Option(
+        20,
+        "--limit",
+        help="Maximum archive records to display.",
+    ),
+    json_output: Optional[Path] = typer.Option(
+        None,
+        "--json-output",
+        help="Optional path to write the archive dashboard JSON.",
+    ),
+    markdown_output: Optional[Path] = typer.Option(
+        None,
+        "--markdown-output",
+        help="Optional path to write the archive dashboard Markdown.",
+    ),
+    html_output: Optional[Path] = typer.Option(
+        None,
+        "--html-output",
+        help="Optional path to write the archive dashboard HTML.",
+    ),
+):
+    """List local evolution challenger/champion records."""
+
+    from tradingagents.crypto import (
+        CryptoTradingConfig,
+        EvolutionArchiveStore,
+        evolution_archive_sections,
+        render_evolution_archive_html,
+        render_evolution_archive_markdown,
+    )
+
+    if limit < 1:
+        raise typer.BadParameter("limit must be at least 1.")
+    config = CryptoTradingConfig.from_env()
+    store = EvolutionArchiveStore(config, archive_path)
+    data = store.load()
+    sections = evolution_archive_sections(data, archive_path=store.path, limit=limit)
+    records = list(reversed(data["records"]))[:limit]
+    champion_id = data.get("champion_id") or "-"
+
+    console.print(
+        Panel(
+            f"archive={store.path} | records={len(data['records'])} | champion={champion_id}",
+            title="Evolution Archive",
+            border_style="cyan",
+        )
+    )
+    table = Table(title=f"Latest {len(records)} Records", box=box.SIMPLE_HEAVY)
+    table.add_column("Status")
+    table.add_column("Candidate")
+    table.add_column("Symbols")
+    table.add_column("Interval")
+    table.add_column("Score", justify="right")
+    table.add_column("Alpha", justify="right")
+    table.add_column("Created")
+    table.add_column("Promoted")
+    for record in records:
+        score = record.get("score", {})
+        status = record.get("status", "-")
+        style = "green" if status == "champion" else "yellow" if status == "challenger" else "dim"
+        table.add_row(
+            f"[{style}]{status}[/{style}]",
+            str(record.get("candidate_id", "-")),
+            ",".join(record.get("symbols", [])),
+            str(record.get("interval", "-")),
+            f"{float(score.get('score', 0.0)):.4f}",
+            f"{float(score.get('alpha_pct', 0.0)):.2f}%",
+            str(record.get("created_at", "-")),
+            str(record.get("promoted_at") or "-"),
+        )
+    console.print(table)
+    if json_output is not None:
+        json_output.parent.mkdir(parents=True, exist_ok=True)
+        json_output.write_text(
+            json.dumps(sections, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        console.print(f"[green]Archive dashboard JSON written:[/green] {json_output}")
+    if markdown_output is not None:
+        markdown_output.parent.mkdir(parents=True, exist_ok=True)
+        markdown_output.write_text(
+            render_evolution_archive_markdown(data, archive_path=store.path, limit=limit),
+            encoding="utf-8",
+        )
+        console.print(f"[green]Archive dashboard Markdown written:[/green] {markdown_output}")
+    if html_output is not None:
+        html_output.parent.mkdir(parents=True, exist_ok=True)
+        html_output.write_text(
+            render_evolution_archive_html(data, archive_path=store.path, limit=limit),
+            encoding="utf-8",
+        )
+        console.print(f"[green]Archive dashboard HTML written:[/green] {html_output}")
+
+
+@app.command("crypto-evolution-jobs")
+def crypto_evolution_jobs(
+    job_index_path: Optional[Path] = typer.Option(
+        None,
+        "--job-index-path",
+        help="Optional evolution job ledger JSON path.",
+    ),
+    limit: int = typer.Option(
+        20,
+        "--limit",
+        help="Maximum jobs to display.",
+    ),
+    json_output: Optional[Path] = typer.Option(
+        None,
+        "--json-output",
+        help="Optional path to write the job dashboard JSON.",
+    ),
+    markdown_output: Optional[Path] = typer.Option(
+        None,
+        "--markdown-output",
+        help="Optional path to write the job dashboard Markdown.",
+    ),
+    html_output: Optional[Path] = typer.Option(
+        None,
+        "--html-output",
+        help="Optional path to write the job dashboard HTML.",
+    ),
+):
+    """List evolution research jobs."""
+
+    from tradingagents.crypto import (
+        CryptoTradingConfig,
+        EvolutionRunStore,
+        evolution_runs_sections,
+        render_evolution_runs_html,
+        render_evolution_runs_markdown,
+    )
+
+    if limit < 1:
+        raise typer.BadParameter("limit must be at least 1.")
+    config = CryptoTradingConfig.from_env()
+    store = EvolutionRunStore(config, job_index_path)
+    data = store.load()
+    sections = evolution_runs_sections(data, ledger_path=store.path, limit=limit)
+    runs = sections["runs"]
+
+    console.print(
+        Panel(
+            f"ledger={store.path} | runs={sections['identity']['run_count']}",
+            title="Evolution Jobs",
+            border_style="cyan",
+        )
+    )
+    table = Table(title=f"Latest {len(runs)} Jobs", box=box.SIMPLE_HEAVY)
+    table.add_column("Status")
+    table.add_column("Run")
+    table.add_column("Challenger")
+    table.add_column("Symbols")
+    table.add_column("Score", justify="right")
+    table.add_column("Alpha", justify="right")
+    table.add_column("Warnings", justify="right")
+    table.add_column("Completed")
+    table.add_column("Error")
+    for run in runs:
+        table.add_row(
+            str(run.get("status", "-")),
+            str(run.get("run_id", "-")),
+            str(run.get("challenger_id") or "-"),
+            ",".join(run.get("symbols", [])),
+            f"{float(run.get('score') or 0.0):.4f}",
+            f"{float(run.get('alpha_pct') or 0.0):.2f}%",
+            str(run.get("warning_count", 0)),
+            str(run.get("completed_at") or "-"),
+            str(run.get("error_message") or "-"),
+        )
+    console.print(table)
+    if json_output is not None:
+        json_output.parent.mkdir(parents=True, exist_ok=True)
+        json_output.write_text(
+            json.dumps(sections, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        console.print(f"[green]Jobs dashboard JSON written:[/green] {json_output}")
+    if markdown_output is not None:
+        markdown_output.parent.mkdir(parents=True, exist_ok=True)
+        markdown_output.write_text(
+            render_evolution_runs_markdown(data, ledger_path=store.path, limit=limit),
+            encoding="utf-8",
+        )
+        console.print(f"[green]Jobs dashboard Markdown written:[/green] {markdown_output}")
+    if html_output is not None:
+        html_output.parent.mkdir(parents=True, exist_ok=True)
+        html_output.write_text(
+            render_evolution_runs_html(data, ledger_path=store.path, limit=limit),
+            encoding="utf-8",
+        )
+        console.print(f"[green]Jobs dashboard HTML written:[/green] {html_output}")
+
+
+@app.command("crypto-evolution-job-inspect")
+def crypto_evolution_job_inspect(
+    run_id: Optional[str] = typer.Argument(
+        None,
+        help="Evolution run id to inspect. Defaults to the latest job.",
+    ),
+    job_index_path: Optional[Path] = typer.Option(
+        None,
+        "--job-index-path",
+        help="Optional evolution job ledger JSON path.",
+    ),
+    json_output: Optional[Path] = typer.Option(
+        None,
+        "--json-output",
+        help="Optional path to write the layered job JSON.",
+    ),
+    markdown_output: Optional[Path] = typer.Option(
+        None,
+        "--markdown-output",
+        help="Optional path to write the job Markdown report.",
+    ),
+    html_output: Optional[Path] = typer.Option(
+        None,
+        "--html-output",
+        help="Optional path to write the read-only job HTML window.",
+    ),
+):
+    """Inspect one evolution job state record."""
+
+    from tradingagents.crypto import (
+        CryptoTradingConfig,
+        EvolutionRunStore,
+        evolution_run_sections,
+        render_evolution_run_html,
+        render_evolution_run_markdown,
+    )
+
+    store = EvolutionRunStore(CryptoTradingConfig.from_env(), job_index_path)
+    data = store.load()
+    runs = [item for item in data.get("runs", []) if isinstance(item, dict)]
+    if run_id:
+        record = next((item for item in runs if item.get("run_id") == run_id), None)
+        if record is None:
+            raise typer.BadParameter(f"run {run_id} was not found in the evolution job ledger.")
+    else:
+        if not runs:
+            raise typer.BadParameter("no evolution jobs found.")
+        record = runs[-1]
+
+    sections = evolution_run_sections(record, ledger_path=store.path)
+    identity = sections["identity"]
+    console.print(
+        Panel(
+            (
+                f"run={identity.get('run_id')} | status={identity.get('status')} | "
+                f"challenger={identity.get('challenger_id') or '-'}"
+            ),
+            title="Evolution Job State",
+            border_style="cyan",
+        )
+    )
+    _print_key_value_table("Job Identity", identity)
+    if sections["score"]:
+        _print_key_value_table("Score", sections["score"])
+    if sections["outputs"]:
+        _print_key_value_table("Outputs", sections["outputs"])
+    if sections["archive"]:
+        _print_key_value_table("Archive", sections["archive"])
+    if sections["run_context"]:
+        _print_key_value_table("Run Context", _flatten_cli_mapping(sections["run_context"]))
+    if sections["error"].get("type") or sections["error"].get("message"):
+        _print_key_value_table("Error", sections["error"])
+    _print_key_value_table("Safety", sections["safety"])
+
+    if json_output is not None:
+        json_output.parent.mkdir(parents=True, exist_ok=True)
+        json_output.write_text(
+            json.dumps(sections, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        console.print(f"[green]Job state JSON written:[/green] {json_output}")
+    if markdown_output is not None:
+        markdown_output.parent.mkdir(parents=True, exist_ok=True)
+        markdown_output.write_text(
+            render_evolution_run_markdown(record, ledger_path=store.path),
+            encoding="utf-8",
+        )
+        console.print(f"[green]Job state Markdown written:[/green] {markdown_output}")
+    if html_output is not None:
+        html_output.parent.mkdir(parents=True, exist_ok=True)
+        html_output.write_text(
+            render_evolution_run_html(record, ledger_path=store.path),
+            encoding="utf-8",
+        )
+        console.print(f"[green]Job state HTML written:[/green] {html_output}")
+
+
+@app.command("crypto-evolution-inspect")
+def crypto_evolution_inspect(
+    candidate_id: Optional[str] = typer.Argument(
+        None,
+        help="Candidate id to inspect. Defaults to the current champion.",
+    ),
+    archive_path: Optional[Path] = typer.Option(
+        None,
+        "--archive-path",
+        help="Optional evolution archive JSON path.",
+    ),
+    json_output: Optional[Path] = typer.Option(
+        None,
+        "--json-output",
+        help="Optional path to write the layered package JSON.",
+    ),
+    markdown_output: Optional[Path] = typer.Option(
+        None,
+        "--markdown-output",
+        help="Optional path to write the package Markdown report.",
+    ),
+    html_output: Optional[Path] = typer.Option(
+        None,
+        "--html-output",
+        help="Optional path to write the read-only package HTML window.",
+    ),
+):
+    """Inspect one evolution package as environment, season, genes, and score."""
+
+    from tradingagents.crypto import (
+        CryptoTradingConfig,
+        EvolutionArchiveStore,
+        evolution_record_sections,
+        render_evolution_record_html,
+        render_evolution_record_markdown,
+    )
+
+    store = EvolutionArchiveStore(CryptoTradingConfig.from_env(), archive_path)
+    if candidate_id:
+        record = store.find(candidate_id)
+    else:
+        record = store.current_champion()
+    if record is None:
+        target = candidate_id or "current champion"
+        raise typer.BadParameter(f"{target} was not found in the evolution archive.")
+
+    try:
+        sections = evolution_record_sections(record)
+    except ValueError as exc:
+        raise typer.BadParameter(str(exc)) from exc
+
+    identity = sections["identity"]
+    score = sections["score"]
+    console.print(
+        Panel(
+            (
+                f"id={identity['candidate_id']} | status={identity['status']} | "
+                f"symbols={','.join(identity.get('symbols') or [])} | "
+                f"interval={identity['interval']} | score={float(score.get('score', 0.0)):.4f}"
+            ),
+            title="Evolution Package State",
+            border_style="cyan",
+        )
+    )
+    _print_key_value_table("Environment", sections["environment"])
+
+    seasons = Table(title="Season Regime", box=box.SIMPLE_HEAVY)
+    seasons.add_column("Season")
+    seasons.add_column("Aggressiveness", justify="right")
+    for row in sections["season_regime"].get("seasons", []):
+        if isinstance(row, dict):
+            seasons.add_row(
+                str(row.get("name", "-")),
+                f"{float(row.get('aggressiveness_multiplier', 0.0)):.2f}",
+            )
+    seasons.add_row("tick_offset_minutes", str(sections["season_regime"].get("tick_offset_minutes", 0)))
+    console.print(seasons)
+
+    _print_key_value_table("Macro Genes", sections["macro_genes"])
+    _print_key_value_table("Timing Genes", sections["timing_genes"])
+    _print_key_value_table("Micro Genes", sections["micro_genes"])
+    _print_key_value_table(
+        "Score",
+        {
+            "score": score.get("score"),
+            "alpha_pct": score.get("alpha_pct"),
+            "realized_pnl_usdt": score.get("realized_pnl_usdt"),
+            "fee_friction_pct": score.get("fee_friction_pct"),
+            "max_drawdown_pct": score.get("max_drawdown_pct"),
+            "trades": score.get("trades"),
+            "win_rate": score.get("win_rate"),
+            "max_consecutive_losses": score.get("max_consecutive_losses"),
+            "risk_rejected": score.get("risk_rejected"),
+            "inventory_event_count": score.get("inventory_event_count"),
+            "inventory_rejected": score.get("inventory_rejected"),
+            "inventory_realized_pnl_usdt": score.get("inventory_realized_pnl_usdt"),
+        },
+    )
+    generation_history = sections.get("generation_history", [])
+    if generation_history:
+        history = Table(title="Generation History", box=box.SIMPLE_HEAVY)
+        history.add_column("Gen", justify="right")
+        history.add_column("Best", justify="right")
+        history.add_column("Avg", justify="right")
+        history.add_column("Mut Prob", justify="right")
+        history.add_column("Mut Scale", justify="right")
+        history.add_column("Stale", justify="right")
+        history.add_column("Improved")
+        for item in generation_history:
+            if isinstance(item, dict):
+                history.add_row(
+                    str(item.get("generation", "-")),
+                    _format_state_value(item.get("best_score")),
+                    _format_state_value(item.get("average_score")),
+                    _format_state_value(item.get("mutation_probability")),
+                    _format_state_value(item.get("mutation_scale")),
+                    str(item.get("stale_generations", "-")),
+                    "yes" if item.get("improved") else "no",
+                )
+        console.print(history)
+    population_plan = sections.get("population_plan", {})
+    if isinstance(population_plan, dict) and population_plan:
+        _print_key_value_table("Population Initialization", population_plan)
+    crucible_windows = sections.get("crucible_windows", [])
+    if crucible_windows:
+        windows = Table(title="Crucible Windows", box=box.SIMPLE_HEAVY)
+        windows.add_column("Window")
+        windows.add_column("Weight", justify="right")
+        windows.add_column("Bars", justify="right")
+        windows.add_column("Start")
+        windows.add_column("End")
+        for item in crucible_windows:
+            if isinstance(item, dict):
+                windows.add_row(
+                    str(item.get("name", "-")),
+                    _format_state_value(item.get("weight")),
+                    _format_state_value(item.get("bars")),
+                    str(item.get("start_time") or "-"),
+                    str(item.get("end_time") or "-"),
+                )
+        console.print(windows)
+    final_review = sections.get("final_review", {})
+    if final_review:
+        _print_key_value_table(
+            "Final Full-Sample Review",
+            {
+                "alpha_pct": final_review.get("alpha_pct"),
+                "total_return_pct": final_review.get("total_return_pct"),
+                "max_drawdown_pct": final_review.get("max_drawdown_pct"),
+                "trades": final_review.get("trades"),
+                "win_rate": final_review.get("win_rate"),
+                "risk_rejected": final_review.get("risk_rejected"),
+            },
+        )
+        inventory_bridge = final_review.get("inventory_bridge", {})
+        if isinstance(inventory_bridge, dict):
+            _print_key_value_table("Inventory Bridge", inventory_bridge)
+        monte_carlo = final_review.get("monte_carlo", {})
+        if isinstance(monte_carlo, dict):
+            _print_key_value_table("Monte Carlo Review", monte_carlo)
+        warnings = final_review.get("warnings") or ()
+        if warnings:
+            console.print("[yellow]Final review warnings:[/yellow] " + ", ".join(warnings))
+
+    if json_output is not None:
+        json_output.parent.mkdir(parents=True, exist_ok=True)
+        json_output.write_text(
+            json.dumps(sections, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        console.print(f"[green]Layered JSON written:[/green] {json_output}")
+    if markdown_output is not None:
+        markdown_output.parent.mkdir(parents=True, exist_ok=True)
+        markdown_output.write_text(render_evolution_record_markdown(record), encoding="utf-8")
+        console.print(f"[green]Markdown written:[/green] {markdown_output}")
+    if html_output is not None:
+        html_output.parent.mkdir(parents=True, exist_ok=True)
+        html_output.write_text(render_evolution_record_html(record), encoding="utf-8")
+        console.print(f"[green]HTML written:[/green] {html_output}")
+
+
+@app.command("crypto-evolution-compare")
+def crypto_evolution_compare(
+    candidate_id: str = typer.Argument(..., help="Candidate id to compare against a baseline."),
+    baseline_id: Optional[str] = typer.Option(
+        None,
+        "--baseline-id",
+        help="Baseline candidate id. Defaults to the current champion.",
+    ),
+    archive_path: Optional[Path] = typer.Option(
+        None,
+        "--archive-path",
+        help="Optional evolution archive JSON path.",
+    ),
+    json_output: Optional[Path] = typer.Option(
+        None,
+        "--json-output",
+        help="Optional path to write the comparison JSON.",
+    ),
+    markdown_output: Optional[Path] = typer.Option(
+        None,
+        "--markdown-output",
+        help="Optional path to write the comparison Markdown.",
+    ),
+    html_output: Optional[Path] = typer.Option(
+        None,
+        "--html-output",
+        help="Optional path to write the comparison HTML.",
+    ),
+):
+    """Compare a challenger or package against the current champion."""
+
+    from tradingagents.crypto import (
+        CryptoTradingConfig,
+        EvolutionArchiveStore,
+        evolution_compare_sections,
+        render_evolution_compare_html,
+        render_evolution_compare_markdown,
+    )
+
+    store = EvolutionArchiveStore(CryptoTradingConfig.from_env(), archive_path)
+    candidate = store.find(candidate_id)
+    if candidate is None:
+        raise typer.BadParameter(f"{candidate_id} was not found in the evolution archive.")
+    baseline = store.find(baseline_id) if baseline_id else store.current_champion()
+    baseline_label = baseline_id or "current champion"
+    if baseline is None:
+        raise typer.BadParameter(f"{baseline_label} was not found in the evolution archive.")
+
+    try:
+        sections = evolution_compare_sections(candidate, baseline)
+    except ValueError as exc:
+        raise typer.BadParameter(str(exc)) from exc
+
+    identity = sections["identity"]
+    review = sections.get("promotion_review", {})
+    console.print(
+        Panel(
+            (
+                f"candidate={identity['candidate_id']} ({identity['candidate_status']}) | "
+                f"baseline={identity['baseline_id']} ({identity['baseline_status']}) | "
+                "delta=candidate-baseline"
+            ),
+            title="Evolution Package Comparison",
+            border_style="cyan",
+        )
+    )
+    if isinstance(review, dict) and review:
+        _print_key_value_table(
+            "Promotion Review",
+            {
+                "verdict": review.get("verdict"),
+                "blocks_promotion": review.get("blocks_promotion"),
+                "score_delta": review.get("score_delta"),
+                "alpha_delta_pct": review.get("alpha_delta_pct"),
+                "max_drawdown_delta_pct": review.get("max_drawdown_delta_pct"),
+                "fee_friction_delta_pct": review.get("fee_friction_delta_pct"),
+                "trade_delta": review.get("trade_delta"),
+                "reasons": ", ".join(review.get("reasons", [])),
+            },
+        )
+    for title, key in (
+        ("Score Delta", "score_delta"),
+        ("Environment Delta", "environment_delta"),
+        ("Season Delta", "season_delta"),
+        ("Macro Gene Delta", "macro_gene_delta"),
+        ("Timing Gene Delta", "timing_gene_delta"),
+        ("Micro Gene Delta", "micro_gene_delta"),
+    ):
+        rows = sections.get(key, [])
+        if rows:
+            _print_compare_table(title, rows)
+
+    if json_output is not None:
+        json_output.parent.mkdir(parents=True, exist_ok=True)
+        json_output.write_text(
+            json.dumps(sections, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        console.print(f"[green]Comparison JSON written:[/green] {json_output}")
+    if markdown_output is not None:
+        markdown_output.parent.mkdir(parents=True, exist_ok=True)
+        markdown_output.write_text(render_evolution_compare_markdown(candidate, baseline), encoding="utf-8")
+        console.print(f"[green]Comparison Markdown written:[/green] {markdown_output}")
+    if html_output is not None:
+        html_output.parent.mkdir(parents=True, exist_ok=True)
+        html_output.write_text(render_evolution_compare_html(candidate, baseline), encoding="utf-8")
+        console.print(f"[green]Comparison HTML written:[/green] {html_output}")
+
+
+def _print_compare_table(title: str, rows: list[dict]) -> None:
+    table = Table(title=title, box=box.SIMPLE_HEAVY)
+    table.add_column("Parameter")
+    table.add_column("Candidate", justify="right")
+    table.add_column("Baseline", justify="right")
+    table.add_column("Delta", justify="right")
+    for row in rows:
+        table.add_row(
+            str(row.get("name", "-")),
+            _format_state_value(row.get("candidate")),
+            _format_state_value(row.get("baseline")),
+            _format_state_value(row.get("delta")),
+        )
+    console.print(table)
+
+
+def _print_key_value_table(title: str, payload: dict) -> None:
+    table = Table(title=title, box=box.SIMPLE_HEAVY)
+    table.add_column("Parameter")
+    table.add_column("Value", justify="right")
+    for name, value in payload.items():
+        table.add_row(str(name), _format_state_value(value))
+    console.print(table)
+
+
+def _format_state_value(value) -> str:
+    if isinstance(value, float):
+        return f"{value:.6f}"
+    if value is None:
+        return "-"
+    return str(value)
+
+
+def _flatten_cli_mapping(payload: dict, prefix: str = "") -> dict:
+    flattened = {}
+    for name, value in payload.items():
+        key = f"{prefix}.{name}" if prefix else str(name)
+        if isinstance(value, dict):
+            flattened.update(_flatten_cli_mapping(value, key))
+        elif isinstance(value, (list, tuple)):
+            flattened[key] = json.dumps(value, ensure_ascii=False, separators=(",", ":"))
+        else:
+            flattened[key] = value
+    return flattened
+
+
+def _print_evolution_launch_sections(sections: dict) -> None:
+    identity = sections.get("identity", {})
+    defaults_used = identity.get("defaults_used") or []
+    _print_key_value_table(
+        "Launch Identity",
+        {
+            "kind": identity.get("kind", "evolution_preset"),
+            "version": identity.get("version", 1),
+            "defaults_used": ", ".join(defaults_used) or "-",
+        },
+    )
+    _print_key_value_table("Environment", sections["environment"])
+
+    seasons = Table(title="Season Regime", box=box.SIMPLE_HEAVY)
+    seasons.add_column("Season")
+    seasons.add_column("Aggressiveness", justify="right")
+    for row in sections["season_regime"]["seasons"]:
+        seasons.add_row(
+            str(row["name"]),
+            f"{float(row['aggressiveness_multiplier']):.2f}",
+        )
+    seasons.add_row(
+        "tick_offset_minutes",
+        str(sections["season_regime"]["tick_offset_minutes"]),
+    )
+    console.print(seasons)
+
+    _print_key_value_table("Macro Genes", sections["macro_genes"])
+    _print_key_value_table("Timing Genes", sections["timing_genes"])
+    _print_key_value_table("Micro Genes", sections["micro_genes"])
+    _print_key_value_table("Safety", sections["safety"])
+
+
+def _print_evolution_preset_validation(validation) -> None:
+    status = "ok" if validation.ok else "review"
+    border = "green" if validation.ok else "yellow"
+    console.print(
+        Panel(
+            (
+                f"status={status} | defaults={len(validation.defaults_used)} | "
+                f"projected={len(validation.projected_fields)} | warnings={len(validation.warnings)}"
+            ),
+            title="Preset Validation",
+            border_style=border,
+        )
+    )
+    if validation.warnings:
+        table = Table(title="Validation Warnings", box=box.SIMPLE_HEAVY)
+        table.add_column("Warning")
+        for warning in validation.warnings:
+            table.add_row(str(warning))
+        console.print(table)
+    if validation.projected_fields:
+        table = Table(title="Projected Inputs", box=box.SIMPLE_HEAVY)
+        table.add_column("Field")
+        for field in validation.projected_fields:
+            table.add_row(str(field))
+        console.print(table)
+
+
+@app.command("crypto-evolution-promote")
+def crypto_evolution_promote(
+    candidate_id: str = typer.Argument(..., help="Challenger candidate id to promote."),
+    archive_path: Optional[Path] = typer.Option(
+        None,
+        "--archive-path",
+        help="Optional evolution archive JSON path.",
+    ),
+):
+    """Promote one archived challenger to champion and retire the old champion."""
+
+    from tradingagents.crypto import CryptoTradingConfig, EvolutionArchiveStore
+
+    config = CryptoTradingConfig.from_env()
+    store = EvolutionArchiveStore(config, archive_path)
+    try:
+        result = store.promote(candidate_id)
+    except KeyError as exc:
+        raise typer.BadParameter(str(exc)) from exc
+
+    score = result.promoted.get("score", {})
+    retired_id = result.retired.get("candidate_id") if result.retired else "-"
+    console.print(
+        Panel(
+            (
+                f"champion={result.candidate_id} | retired={retired_id} | "
+                f"archive={result.archive_path}"
+            ),
+            title="Evolution Champion Promoted",
+            border_style="green",
+        )
+    )
+    if result.promotion_review is not None:
+        _print_key_value_table(
+            "Promotion Review At Promote",
+            {
+                "verdict": result.promotion_review.get("verdict"),
+                "blocks_promotion": result.promotion_review.get("blocks_promotion"),
+                "baseline_candidate_id": result.promotion_review.get("baseline_candidate_id"),
+                "score_delta": result.promotion_review.get("score_delta"),
+                "alpha_delta_pct": result.promotion_review.get("alpha_delta_pct"),
+                "max_drawdown_delta_pct": result.promotion_review.get("max_drawdown_delta_pct"),
+                "fee_friction_delta_pct": result.promotion_review.get("fee_friction_delta_pct"),
+                "trade_delta": result.promotion_review.get("trade_delta"),
+                "reasons": ", ".join(result.promotion_review.get("reasons", [])),
+            },
+        )
+    else:
+        console.print("[yellow]Promotion review skipped:[/yellow] no previous champion baseline.")
+    if result.champion_cache_path is not None:
+        console.print(f"[green]Champion cache refreshed:[/green] {result.champion_cache_path}")
+    summary = Table(title="Champion Package", box=box.SIMPLE_HEAVY)
+    summary.add_column("Metric")
+    summary.add_column("Value", justify="right")
+    summary.add_row("Score", f"{float(score.get('score', 0.0)):.4f}")
+    summary.add_row("Alpha", f"{float(score.get('alpha_pct', 0.0)):.2f}%")
+    summary.add_row("Trades", str(score.get("trades", 0)))
+    summary.add_row("Max drawdown", f"{float(score.get('max_drawdown_pct', 0.0)):.2f}%")
+    summary.add_row("Status", result.promoted.get("status", "champion"))
+    console.print(summary)
+
+
+@app.command("crypto-evolution-champion-cache")
+def crypto_evolution_champion_cache(
+    archive_path: Optional[Path] = typer.Option(
+        None,
+        "--archive-path",
+        help="Optional evolution archive JSON path.",
+    ),
+    refresh: bool = typer.Option(
+        False,
+        "--refresh",
+        help="Refresh the local champion cache from the current archive champion.",
+    ),
+    output: Optional[Path] = typer.Option(
+        None,
+        "--output",
+        help="Optional path to copy the champion cache JSON payload.",
+    ),
+):
+    """Show or refresh the read-only champion cache used by runtime instances."""
+
+    from tradingagents.crypto import (
+        CryptoTradingConfig,
+        EvolutionArchiveStore,
+        evolution_champion_cache_path,
+    )
+
+    config = CryptoTradingConfig.from_env()
+    store = EvolutionArchiveStore(config, archive_path)
+    cache_path = evolution_champion_cache_path(config, store.path)
+    payload = None
+    if refresh:
+        payload = store.write_champion_cache()
+        if payload is None:
+            raise typer.BadParameter("current champion was not found in the evolution archive.")
+    elif cache_path.exists():
+        payload = json.loads(cache_path.read_text(encoding="utf-8"))
+    else:
+        payload = store.write_champion_cache()
+        if payload is None:
+            raise typer.BadParameter("champion cache is missing and no champion exists to refresh it.")
+
+    console.print(
+        Panel(
+            (
+                f"candidate={payload.get('candidate_id')} | status={payload.get('status')} | "
+                f"cache={cache_path}"
+            ),
+            title="Evolution Champion Cache",
+            border_style="cyan",
+        )
+    )
+    _print_key_value_table(
+        "Champion Cache",
+        {
+            "candidate_id": payload.get("candidate_id"),
+            "cached_at": payload.get("cached_at"),
+            "promoted_at": payload.get("promoted_at"),
+            "symbols": ",".join(payload.get("symbols", [])),
+            "interval": payload.get("interval"),
+            "places_live_orders": payload.get("safety", {}).get("places_live_orders"),
+            "runtime_modes_allowed": ",".join(payload.get("safety", {}).get("runtime_modes_allowed", [])),
+        },
+    )
+    if output is not None:
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(
+            json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        console.print(f"[green]Champion cache copied:[/green] {output}")
+
+
+@app.command("crypto-paper-queue")
+def crypto_paper_queue(
+    symbols: str = typer.Option(
+        "BTC,ETH,SOL,HYPE",
+        "--symbols",
+        help="Comma-separated Hyperliquid coins to replay before queueing.",
+    ),
+    mainnet: bool = typer.Option(
+        True,
+        "--mainnet/--testnet",
+        help="Use mainnet public candles or testnet public candles for candidate screening.",
+    ),
+    intervals: str = typer.Option(
+        "5m,15m,1h",
+        "--intervals",
+        help="Comma-separated kline intervals to compare.",
+    ),
+    bars: int = typer.Option(
+        800,
+        "--bars",
+        help="Historical candles to request per symbol per case.",
+    ),
+    lookbacks: str = typer.Option(
+        "60,120",
+        "--lookbacks",
+        help="Comma-separated rolling lookback values.",
+    ),
+    max_holding_bars: str = typer.Option(
+        "16,32,48",
+        "--max-holding-bars",
+        help="Comma-separated maximum historical holding bars to compare.",
+    ),
+    fee_bps: float = typer.Option(
+        4.0,
+        "--fee-bps",
+        help="Taker fee bps charged on entry and exit during historical replay.",
+    ),
+    slippage_bps: float = typer.Option(
+        2.0,
+        "--slippage-bps",
+        help="Adverse slippage bps applied to entry and exit fills during replay.",
+    ),
+    fusion: bool = typer.Option(
+        True,
+        "--fusion/--no-fusion",
+        help="Enable or disable strategy fusion during replay and queued paper commands.",
+    ),
+    lana: bool = typer.Option(
+        False,
+        "--lana/--no-lana",
+        help="Enable Lana-inspired hot-mover logic during replay and queued paper commands.",
+    ),
+    top: int = typer.Option(
+        3,
+        "--top",
+        help="Maximum paper candidates to queue.",
+    ),
+    min_trades: int = typer.Option(
+        5,
+        "--min-trades",
+        help="Minimum simulated trades required for a paper candidate.",
+    ),
+    min_win_rate: float = typer.Option(
+        0.40,
+        "--min-win-rate",
+        help="Minimum win rate required for a paper candidate, e.g. 0.40.",
+    ),
+    min_return_pct: float = typer.Option(
+        0.0,
+        "--min-return-pct",
+        help="Minimum total return percent required for a paper candidate.",
+    ),
+    max_drawdown_pct: float = typer.Option(
+        5.0,
+        "--max-drawdown-pct",
+        help="Maximum drawdown percent allowed for a paper candidate.",
+    ),
+    max_consecutive_losses: int = typer.Option(
+        3,
+        "--max-consecutive-losses",
+        help="Maximum loss streak allowed for a paper candidate.",
+    ),
+    interval_seconds: int = typer.Option(
+        300,
+        "--interval-seconds",
+        help="Interval seconds to place in generated paper autopilot commands.",
+    ),
+    cycles: int = typer.Option(
+        0,
+        "--cycles",
+        help="Cycle count to place in generated paper autopilot commands. Use 0 for service loop.",
+    ),
+    ai_review: bool = typer.Option(
+        False,
+        "--ai-review",
+        help="Include --ai-review in generated paper autopilot commands.",
+    ),
+    output: Optional[Path] = typer.Option(
+        None,
+        "--output",
+        help="Output base path. Defaults to state_dir/paper_queue.",
+    ),
+):
+    """Build a paper-only entry queue from backtest-approved candidates."""
+
+    from dataclasses import replace
+
+    from tradingagents.crypto import (
+        BacktestCandidateRules,
+        CryptoBacktestSweepRunner,
+        CryptoTradingConfig,
+        build_paper_queue_plan,
+        paper_queue_output_paths,
+    )
+
+    selected = tuple(item.upper() for item in _parse_text_tuple(symbols, "--symbols"))
+    interval_options = _parse_text_tuple(intervals, "--intervals")
+    lookback_options = _parse_int_tuple(lookbacks, "--lookbacks")
+    holding_options = _parse_int_tuple(max_holding_bars, "--max-holding-bars")
+    if any(lookback < 60 for lookback in lookback_options):
+        raise typer.BadParameter("all lookbacks must be at least 60 for the scanner.")
+    if any(holding < 1 for holding in holding_options):
+        raise typer.BadParameter("all max-holding-bars values must be at least 1.")
+    if bars <= max(lookback_options) + 2:
+        raise typer.BadParameter("bars must be greater than the largest lookback plus 2.")
+    if top < 1:
+        raise typer.BadParameter("top must be at least 1.")
+    if min_trades < 1:
+        raise typer.BadParameter("min-trades must be at least 1.")
+    if not 0 <= min_win_rate <= 1:
+        raise typer.BadParameter("min-win-rate must be between 0 and 1.")
+    if max_drawdown_pct < 0:
+        raise typer.BadParameter("max-drawdown-pct must be non-negative.")
+    if max_consecutive_losses < 0:
+        raise typer.BadParameter("max-consecutive-losses must be non-negative.")
+    if interval_seconds < 1:
+        raise typer.BadParameter("interval-seconds must be at least 1.")
+    if cycles < 0:
+        raise typer.BadParameter("cycles must be 0 or a positive integer.")
+
+    config = replace(
+        CryptoTradingConfig.from_env(),
+        exchange_provider="hyperliquid",
+        hyperliquid_testnet=not mainnet,
+        interval=interval_options[0],
+        lookback_limit=lookback_options[0],
+        strategy_fusion_enabled=fusion,
+        lana_strategy_enabled=lana,
+        hotlist_enabled=False,
+    )
+    candidate_rules = BacktestCandidateRules(
+        min_trades=min_trades,
+        min_win_rate=min_win_rate,
+        min_total_return_pct=min_return_pct,
+        max_drawdown_pct=max_drawdown_pct,
+        max_consecutive_losses=max_consecutive_losses,
+    )
+    sweep_report = CryptoBacktestSweepRunner(config).run(
+        symbols=selected,
+        intervals=interval_options,
+        lookbacks=lookback_options,
+        max_holding_bars_options=holding_options,
+        bars=bars,
+        fee_bps=fee_bps,
+        slippage_bps=slippage_bps,
+        fusion_enabled=fusion,
+        lana_enabled=lana,
+    )
+    plan = build_paper_queue_plan(
+        sweep_report,
+        candidate_rules,
+        top=top,
+        interval_seconds=interval_seconds,
+        cycles=cycles,
+        ai_review=ai_review,
+    )
+    json_path, markdown_path = paper_queue_output_paths(output or (config.state_dir / "paper_queue"))
+    json_path.parent.mkdir(parents=True, exist_ok=True)
+    markdown_path.parent.mkdir(parents=True, exist_ok=True)
+    json_path.write_text(
+        json.dumps(plan.to_dict(), ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    markdown_path.write_text(plan.render_markdown(), encoding="utf-8")
+
+    console.print(
+        Panel(
+            (
+                f"symbols={','.join(selected)} | cases={len(sweep_report.results)} | "
+                f"queued={plan.ready_count} | mode=paper only"
+            ),
+            title="Hyperliquid Paper Entry Queue",
+            border_style="cyan",
+        )
+    )
+    table = Table(title=f"Queued Paper Candidates: {plan.ready_count}", box=box.SIMPLE_HEAVY)
+    table.add_column("Rank", justify="right")
+    table.add_column("Symbols")
+    table.add_column("Interval")
+    table.add_column("Lookback", justify="right")
+    table.add_column("Hold", justify="right")
+    table.add_column("Trades", justify="right")
+    table.add_column("Win", justify="right")
+    table.add_column("Return", justify="right")
+    table.add_column("Max DD", justify="right")
+    table.add_column("Score", justify="right")
+    for item in plan.items:
+        table.add_row(
+            str(item.rank),
+            ",".join(item.symbols),
+            item.interval,
+            str(item.lookback_limit),
+            str(item.max_holding_bars),
+            str(item.trades),
+            f"{item.win_rate:.2%}",
+            f"{item.total_return_pct:.2f}%",
+            f"{item.max_drawdown_pct:.2f}%",
+            f"{item.risk_adjusted_score:.4f}",
+        )
+    console.print(table)
+    if not plan.items:
+        console.print(
+            Panel(
+                "No paper entries were queued because no sweep case passed the candidate filters.",
+                title="Queue Empty",
+                border_style="yellow",
+            )
+        )
+    console.print(f"[green]Queue JSON:[/green] {json_path}")
+    console.print(f"[dim]Queue Markdown:[/dim] {markdown_path}")
 
 
 @app.command("crypto-hyperliquid-account")

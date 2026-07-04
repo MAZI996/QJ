@@ -102,6 +102,11 @@ class CryptoTradingConfig:
     market_quality_depth_levels: int = 5
     market_quality_max_abs_imbalance: float = 0.80
     market_quality_max_abs_funding_rate: float = 0.001
+    entry_quality_enabled: bool = True
+    entry_quality_min_close_position: float = 0.55
+    entry_quality_min_trend_efficiency: float = 0.35
+    entry_quality_max_ema_extension_pct: float = 0.08
+    entry_quality_max_chase_atr_multiple: float = 12.0
 
     ai_router: str = "tradingagents"
     ai_model: str = ""
@@ -243,6 +248,23 @@ class CryptoTradingConfig:
             market_quality_max_abs_funding_rate=_float_env(
                 prefix + "MARKET_QUALITY_MAX_ABS_FUNDING_RATE",
                 0.001,
+            ),
+            entry_quality_enabled=_bool_env(prefix + "ENTRY_QUALITY_ENABLED", True),
+            entry_quality_min_close_position=_float_env(
+                prefix + "ENTRY_QUALITY_MIN_CLOSE_POSITION",
+                0.55,
+            ),
+            entry_quality_min_trend_efficiency=_float_env(
+                prefix + "ENTRY_QUALITY_MIN_TREND_EFFICIENCY",
+                0.35,
+            ),
+            entry_quality_max_ema_extension_pct=_float_env(
+                prefix + "ENTRY_QUALITY_MAX_EMA_EXTENSION_PCT",
+                0.08,
+            ),
+            entry_quality_max_chase_atr_multiple=_float_env(
+                prefix + "ENTRY_QUALITY_MAX_CHASE_ATR_MULTIPLE",
+                12.0,
             ),
             ai_router=os.getenv(prefix + "AI_ROUTER", "tradingagents"),
             ai_model=os.getenv(prefix + "AI_MODEL", ""),

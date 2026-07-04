@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from .config import CryptoTradingConfig
+from .entry_quality import EntryQualityGate
 from .hotlist import load_hot_symbols
 from .indicators import atr, ema, rsi, sma
 from .lana_strategy import LanaInspiredStrategy
@@ -16,6 +17,7 @@ class OpportunityScanner:
         self.client = client
         self.config = config
         self.lana_strategy = LanaInspiredStrategy(config)
+        self.entry_quality = EntryQualityGate(config)
 
     def scan(self, symbols: tuple[str, ...] | None = None) -> list[OpportunitySignal]:
         selected = self._selected_symbols(symbols)
@@ -42,6 +44,8 @@ class OpportunityScanner:
                     open_interest,
                     hot_symbols=hot_symbols,
                 )
+                if lana_signal is not None:
+                    lana_signal = self.entry_quality.apply(candles, lana_signal)
             signals.append(self._choose_signal(baseline, lana_signal))
         return sorted(signals, key=lambda signal: signal.confidence, reverse=True)
 
@@ -141,7 +145,7 @@ class OpportunityScanner:
             "change_pct_24h": ticker.price_change_pct_24h,
             "quote_volume_24h": ticker.quote_volume_24h,
         }
-        return OpportunitySignal(
+        signal = OpportunitySignal(
             symbol=symbol,
             side=side,
             confidence=confidence,
@@ -153,6 +157,7 @@ class OpportunityScanner:
             reasons=tuple(reasons),
             metrics=metrics,
         )
+        return self.entry_quality.apply(candles, signal)
 
     @staticmethod
     def _choose_signal(

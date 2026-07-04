@@ -29,18 +29,33 @@ python -m cli.main crypto-hyperliquid-check --mainnet --symbol BTC --wallet-addr
 python -m cli.main crypto-hyperliquid-markets --mainnet --limit 20
 python -m cli.main crypto-market-quality --mainnet --symbols BTC,ETH,SOL,HYPE
 python -m cli.main crypto-hyperliquid-account --mainnet --wallet-address 0xYourWallet
+python -m cli.main crypto-recover-orders --mainnet --wallet-address 0xYourWallet --symbols BTC,ETH,SOL,HYPE
+python -m cli.main crypto-live-readiness --target paper
 ```
 
 TradingAgents workflow scan:
 
 ```powershell
 python -m cli.main crypto-workflow --symbols BTC,ETH,SOL,HYPE --mode analysis
+python -m cli.main crypto-backtest --mainnet --symbols BTC,ETH,SOL,HYPE --interval 15m --bars 500
+python -m cli.main crypto-backtest-sweep --mainnet --symbols BTC,ETH,SOL,HYPE --intervals 5m,15m,1h --lookbacks 60,120 --max-holding-bars 16,32,48 --bars 500
+python -m cli.main crypto-backtest-sweep --mainnet --symbols BTC,ETH,SOL,HYPE --intervals 5m,15m,1h --lookbacks 60,120 --max-holding-bars 16,32,48 --bars 800 --min-trades 5 --min-win-rate 0.40 --min-return-pct 0 --max-drawdown-pct 5 --max-consecutive-losses 3 --candidates-only
+python -m cli.main crypto-paper-queue --mainnet --symbols BTC,ETH,SOL,HYPE --intervals 5m,15m,1h --lookbacks 60,120 --max-holding-bars 16,32,48 --bars 800 --min-trades 5 --min-win-rate 0.40 --min-return-pct 0 --max-drawdown-pct 5 --max-consecutive-losses 3
 python -m cli.main crypto-autopilot --symbols BTC,ETH,SOL,HYPE --mode paper --execute-top --cycles 0 --interval-seconds 300
 ```
 
 The scan path now includes the Hyperliquid market-quality gate by default:
 spread, top-book depth, order-book imbalance, and funding are checked before
 risk sizing. See `docs/crypto-market-quality.md`.
+
+The scanner also applies an entry-quality gate by default. It demotes fragile
+BUY candidates with weak candle closes, noisy recent paths, or entries stretched
+too far above the EMA anchor before AI review, risk sizing, paper mode, or any
+execution route.
+
+Historical replay is documented in `docs/crypto-backtest.md`; the paper queue is
+documented in `docs/crypto-paper-queue.md`. Both use public candles only and
+never submit orders.
 
 ## Official SDK Execution Boundary
 

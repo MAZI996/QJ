@@ -82,6 +82,69 @@ class PositionStore:
     def active_positions(self) -> list[PositionRecord]:
         return [item for item in self.load().values() if item.is_open]
 
+    def sync_position(
+        self,
+        symbol: str,
+        quantity: float,
+        avg_entry_price: float,
+        stop_loss: float | None = None,
+        take_profit: float | None = None,
+        order_id: str = "",
+        notes: str = "",
+    ) -> PositionRecord | None:
+        """Mirror an exchange-reported position into local state."""
+
+        symbol = symbol.upper()
+        records = self.load()
+        current = records.get(symbol)
+        now = _now_iso()
+
+        if quantity <= 0:
+            if current is None:
+                return None
+            record = replace(
+                current,
+                quantity=0.0,
+                status="CLOSED",
+                updated_at=now,
+                last_order_id=order_id or current.last_order_id,
+                notes=notes or current.notes,
+            )
+            records[symbol] = record
+            self.save(records)
+            return record
+
+        if avg_entry_price <= 0:
+            return None
+
+        if current:
+            record = replace(
+                current,
+                quantity=quantity,
+                avg_entry_price=avg_entry_price,
+                stop_loss=stop_loss if stop_loss is not None else current.stop_loss,
+                take_profit=take_profit if take_profit is not None else current.take_profit,
+                status="OPEN",
+                updated_at=now,
+                last_order_id=order_id or current.last_order_id,
+                notes=notes or current.notes,
+            )
+        else:
+            record = PositionRecord(
+                symbol=symbol,
+                quantity=quantity,
+                avg_entry_price=avg_entry_price,
+                stop_loss=stop_loss,
+                take_profit=take_profit,
+                opened_at=now,
+                updated_at=now,
+                last_order_id=order_id,
+                notes=notes,
+            )
+        records[symbol] = record
+        self.save(records)
+        return record
+
     def apply_order_result(self, intent: OrderIntent, result: OrderResult) -> PositionRecord | None:
         if not result.accepted:
             return None

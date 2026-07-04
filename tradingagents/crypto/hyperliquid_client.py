@@ -128,6 +128,15 @@ class HyperliquidClient:
         payload = self._info({"type": "clearinghouseState", "user": address})
         return payload if isinstance(payload, dict) else {}
 
+    def get_open_orders(self, wallet_address: str | None = None) -> list[dict[str, Any]]:
+        address = wallet_address or self.config.hyperliquid_wallet_address
+        if not address:
+            raise HyperliquidAPIError("TRADINGAGENTS_CRYPTO_HYPERLIQUID_WALLET_ADDRESS is empty.")
+        payload = self._info({"type": "openOrders", "user": address})
+        if not isinstance(payload, list):
+            raise HyperliquidAPIError("Invalid openOrders payload.")
+        return [row for row in payload if isinstance(row, dict)]
+
     def get_account_balances(self) -> list[AccountBalance]:
         state = self.get_user_state()
         margin = state.get("marginSummary", {})
@@ -250,14 +259,28 @@ class HyperliquidClient:
                 "User-Agent": "TradingAgents-Crypto/0.1",
             },
         )
-        try:
-            with urllib.request.urlopen(request, timeout=20) as response:
-                raw = response.read().decode("utf-8")
-        except urllib.error.HTTPError as exc:
-            body = exc.read().decode("utf-8", errors="replace")
-            raise HyperliquidAPIError(f"Hyperliquid HTTP {exc.code}: {body}") from exc
-        except urllib.error.URLError as exc:
-            raise HyperliquidAPIError(f"Hyperliquid request failed: {exc.reason}") from exc
+        last_error: urllib.error.URLError | None = None
+        for attempt in range(3):
+            try:
+                with urllib.request.urlopen(request, timeout=20) as response:
+                    raw = response.read().decode("utf-8")
+                break
+            except urllib.error.HTTPError as exc:
+                body = exc.read().decode("utf-8", errors="replace")
+                raise HyperliquidAPIError(f"Hyperliquid HTTP {exc.code}: {body}") from exc
+            except urllib.error.URLError as exc:
+                last_error = exc
+                if attempt < 2:
+                    time.sleep(0.5 * (attempt + 1))
+                    continue
+                raise HyperliquidAPIError(
+                    f"Hyperliquid request failed after 3 attempts: {exc.reason}"
+                ) from exc
+        else:
+            assert last_error is not None
+            raise HyperliquidAPIError(
+                f"Hyperliquid request failed after 3 attempts: {last_error.reason}"
+            ) from last_error
 
         try:
             return json.loads(raw)

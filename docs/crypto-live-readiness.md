@@ -3,6 +3,24 @@
 This document tracks the live-automation layers added after the initial scanner,
 workflow, strategy fusion, and autopilot shell.
 
+## 1. Readiness Gate
+
+Implemented in `tradingagents/crypto/live_readiness.py`.
+
+This command is read-only. It does not place orders and does not print private
+key values. Use it before moving from paper to testnet or from testnet to live:
+
+```powershell
+python -m cli.main crypto-live-readiness --target paper
+python -m cli.main crypto-live-readiness --target testnet --network --symbol BTC
+python -m cli.main crypto-live-readiness --target live --mainnet --wallet-address 0xYourWallet --network --symbol BTC
+```
+
+The live target fails unless the local gates are aligned: Hyperliquid mainnet,
+SDK execution enabled, live switch enabled, API wallet configured, leverage at
+1, protective orders enabled, emergency stop configured, circuit breaker clear,
+and paper-order evidence present.
+
 ## 2. Position Management
 
 Implemented in `tradingagents/crypto/positions.py`.
@@ -40,14 +58,16 @@ Implemented in `tradingagents/crypto/order_recovery.py`.
 
 - Current recovery reads legacy Binance `openOrders` and recent `myTrades` for
   selected symbols.
-- Hyperliquid recovery should be implemented against account state/user events
-  before live execution is enabled.
+- Hyperliquid recovery reads clearinghouse account state and open orders, then
+  mirrors long-only exchange positions into the local position store.
+- Hyperliquid short positions are reported but not synced into local state during
+  the initial long-only validation phase.
 - Trade fills update local positions.
 - User-data `executionReport` payloads can be normalized into local position
   state. A long-running websocket process is still the next deployment step.
 
 ```powershell
-python -m cli.main crypto-recover-orders --symbols BTCUSDT,ETHUSDT
+python -m cli.main crypto-recover-orders --mainnet --wallet-address 0xYourWallet --symbols BTC,ETH
 ```
 
 ## 5. Daily Loss Circuit Breaker
