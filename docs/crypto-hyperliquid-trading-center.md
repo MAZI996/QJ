@@ -4,6 +4,9 @@ Hyperliquid is now the default target venue for this crypto automation project.
 The old Binance adapter remains in the repository as a legacy optional adapter,
 but new trading-center work should use Hyperliquid first.
 
+For the no-Longxia direct integration runbook, see
+`docs/crypto-direct-hyperliquid-integration.md`.
+
 ## Safe Configuration
 
 Do not paste private keys into chat. Put them only on the server that runs the
