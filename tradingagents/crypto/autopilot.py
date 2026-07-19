@@ -10,7 +10,9 @@ from typing import Iterator
 from .circuit_breaker import DailyLossCircuitBreaker
 from .config import CryptoTradingConfig
 from .decision_journal import DecisionJournalWrite, write_workflow_report
+from .engine import CryptoTradingEngine
 from .models import ExecutionMode
+from .position_guardian import PositionGuardian, PositionGuardResult
 from .workflow_report import CryptoTradingAgentsWorkflow, CryptoWorkflowReport
 
 
@@ -25,9 +27,12 @@ class AutoPilotCycleResult:
     saved: DecisionJournalWrite | None
     stopped: bool
     reason: str
+    position_guard: PositionGuardResult | None = None
 
     @property
     def final_action(self) -> str:
+        if self.position_guard and self.position_guard.close_signals:
+            return "CLOSE" if self.position_guard.accepted_closes else "CLOSE_SIGNAL"
         if self.report is None:
             return "STOP"
         approved = self.report.approved
@@ -45,6 +50,14 @@ class AutoPilotCycleResult:
 
     @property
     def execution_message(self) -> str:
+        if self.position_guard and self.position_guard.close_attempts:
+            return " | ".join(
+                item.execution.message
+                for item in self.position_guard.close_attempts
+                if item.execution is not None
+            )
+        if self.position_guard and self.position_guard.close_signals:
+            return self.position_guard.summary
         if self.report is None:
             return self.reason
         for item in self.report.reviewed:
@@ -70,6 +83,8 @@ class CryptoAutoPilot:
         ai_review_enabled: bool = False,
         journal_dir: Path | None = None,
         allow_live: bool = False,
+        guard_positions: bool = True,
+        auto_close: bool = False,
     ) -> Iterator[AutoPilotCycleResult]:
         mode = execution_mode or self.config.execution_mode
         self._validate_execution(mode, allow_live)
@@ -85,6 +100,8 @@ class CryptoAutoPilot:
                 live_confirmation=live_confirmation,
                 ai_review_enabled=ai_review_enabled,
                 journal_dir=journal_dir,
+                guard_positions=guard_positions,
+                auto_close=auto_close,
             )
             yield result
             if result.stopped or (cycles > 0 and cycle >= cycles):
@@ -100,6 +117,8 @@ class CryptoAutoPilot:
         live_confirmation: str = "",
         ai_review_enabled: bool = False,
         journal_dir: Path | None = None,
+        guard_positions: bool = True,
+        auto_close: bool = False,
     ) -> AutoPilotCycleResult:
         stop_reason = self._emergency_stop_reason()
         if stop_reason:
@@ -121,9 +140,22 @@ class CryptoAutoPilot:
             )
 
         mode = execution_mode or self.config.execution_mode
-        report = CryptoTradingAgentsWorkflow(config=self.config).run(
+        engine = CryptoTradingEngine(self.config)
+        position_guard = None
+        if guard_positions:
+            position_guard = PositionGuardian(engine.client, self.config).run(
+                mode=mode,
+                live_confirmation=live_confirmation,
+                execute=auto_close,
+            )
+        skip_entries = (
+            position_guard is not None
+            and bool(position_guard.close_signals)
+            and self.config.position_guardian_skip_entries_after_close
+        )
+        report = CryptoTradingAgentsWorkflow(config=self.config, engine=engine).run(
             symbols=symbols,
-            execute_top=execute_top,
+            execute_top=execute_top and not skip_entries,
             execution_mode=mode,
             live_confirmation=live_confirmation,
             ai_review_enabled=ai_review_enabled,
@@ -138,6 +170,11 @@ class CryptoAutoPilot:
                 "interval": self.config.interval,
                 "execution_mode": mode,
                 "execute_top": execute_top,
+                "execute_top_skipped_by_position_guardian": skip_entries,
+                "auto_close_requested": auto_close,
+                "position_guardian": (
+                    position_guard.to_dict() if position_guard is not None else None
+                ),
                 "ai_review_requested": ai_review_enabled,
                 "strategy_fusion_enabled": self.config.strategy_fusion_enabled,
             },
@@ -148,6 +185,7 @@ class CryptoAutoPilot:
             saved=saved,
             stopped=False,
             reason="cycle completed",
+            position_guard=position_guard,
         )
 
     def _validate_execution(self, mode: ExecutionMode, allow_live: bool) -> None:

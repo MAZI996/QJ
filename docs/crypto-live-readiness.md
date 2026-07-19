@@ -19,7 +19,7 @@ python -m cli.main crypto-live-readiness --target live --mainnet --wallet-addres
 The live target fails unless the local gates are aligned: Hyperliquid mainnet,
 SDK execution enabled, live switch enabled, API wallet configured, leverage at
 1, protective orders enabled, emergency stop configured, circuit breaker clear,
-and paper-order evidence present.
+paper-order evidence present, and the position guardian enabled.
 
 ## 2. Position Management
 
@@ -37,12 +37,18 @@ python -m cli.main crypto-positions
 ## 3. Stop/Take-Profit Protection
 
 Implemented in `tradingagents/crypto/protective_orders.py`,
-`tradingagents/crypto/hyperliquid_execution.py`, and wired into
-`ExecutionRouter`.
+`tradingagents/crypto/hyperliquid_execution.py`,
+`tradingagents/crypto/position_guardian.py`, and wired into `ExecutionRouter`
+and `crypto-autopilot`.
 
 - Current protective sell plans are legacy Binance Spot OCO-style params.
 - Hyperliquid execution can submit grouped entry + reduce-only TP/SL trigger
   orders through the official SDK when protective orders are enabled.
+- The position guardian checks locally tracked long positions before every
+  autopilot scan and can submit reduce-only SELL closes when `--auto-close` is
+  present.
+- Non-reduce-only Hyperliquid SELL remains blocked; this is automatic
+  long-position closing, not short selling.
 - Legacy live OCO submission is gated behind
   `TRADINGAGENTS_CRYPTO_PROTECTIVE_OCO_ENABLED=true`.
 - SDK execution remains disabled until server keys, paper behavior, and testnet
@@ -137,6 +143,10 @@ $env:TRADINGAGENTS_CRYPTO_HYPERLIQUID_SDK_EXECUTION_ENABLED="false"
 $env:TRADINGAGENTS_CRYPTO_HYPERLIQUID_REQUIRE_PROTECTIVE_ORDERS="true"
 $env:TRADINGAGENTS_CRYPTO_PROTECTIVE_OCO_ENABLED="false"
 $env:TRADINGAGENTS_CRYPTO_EMERGENCY_STOP_FILE="C:\tradingagents-stop.txt"
+$env:TRADINGAGENTS_CRYPTO_POSITION_GUARDIAN_ENABLED="true"
+$env:TRADINGAGENTS_CRYPTO_POSITION_GUARDIAN_CLOSE_ON_STOP="true"
+$env:TRADINGAGENTS_CRYPTO_POSITION_GUARDIAN_CLOSE_ON_TAKE_PROFIT="true"
+$env:TRADINGAGENTS_CRYPTO_POSITION_GUARDIAN_SKIP_ENTRIES_AFTER_CLOSE="true"
 ```
 
 Do not enable live Hyperliquid market orders until `crypto-account`,

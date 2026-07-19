@@ -52,7 +52,7 @@ class ExecutionRouter:
                 selected_mode,
                 live_confirmation=live_confirmation,
             )
-            if selected_mode == "live" and result.accepted:
+            if selected_mode in {"testnet", "live"} and result.accepted:
                 self.positions.apply_order_result(intent, result)
             return result
 

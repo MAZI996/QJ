@@ -110,6 +110,7 @@ from .paper_queue import (
     paper_queue_output_paths,
 )
 from .paper_status import PaperStatusSummary, summarize_paper_status
+from .position_guardian import PositionGuardian, PositionGuardDecision, PositionGuardResult
 from .positions import PositionRecord, PositionStore
 from .protective_orders import ProtectiveOrderPlan
 from .regime import RegimeAssessment, RegimeEngine, RegimeSymbolSnapshot
@@ -183,6 +184,9 @@ __all__ = [
     "PaperQueuePlan",
     "PaperStatusSummary",
     "PerformanceSummary",
+    "PositionGuardian",
+    "PositionGuardDecision",
+    "PositionGuardResult",
     "PositionRecord",
     "PositionStore",
     "ProtectiveOrderPlan",

@@ -167,7 +167,7 @@ def _queue_item_from_result(
         f"--symbols {symbols} "
         f"--interval {case.interval} "
         f"--lookback {case.lookback_limit} "
-        "--mode paper --execute-top "
+        "--mode paper --execute-top --auto-close "
         f"--cycles {cycles} "
         f"--interval-seconds {interval_seconds} "
         f"{'--ai-review ' if ai_review else ''}"

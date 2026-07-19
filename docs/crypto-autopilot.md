@@ -16,6 +16,8 @@ Defaults:
 - `--interval-seconds 300`: five minutes between cycles when multiple cycles run.
 - `--mode analysis`: no order submission.
 - `--execute-top false`: no execution unless explicitly requested.
+- `--auto-close false`: position exits are inspected but reduce-only close
+  orders are not submitted unless explicitly requested.
 - `--fusion true`: high-star strategy fusion is enabled.
 - Reports are written to `TRADINGAGENTS_CRYPTO_STATE_DIR`.
 
@@ -25,16 +27,22 @@ Service-style loop:
 python -m cli.main crypto-autopilot --symbols BTC,ETH,SOL,HYPE --mode paper --execute-top --cycles 0 --interval-seconds 300
 ```
 
+Paper loop with automatic reduce-only exits for locally tracked positions:
+
+```powershell
+python -m cli.main crypto-autopilot --symbols BTC,ETH,SOL,HYPE --mode paper --execute-top --auto-close --cycles 0 --interval-seconds 300
+```
+
 Testnet execution:
 
 ```powershell
-python -m cli.main crypto-autopilot --symbols BTC,ETH --mode testnet --execute-top --cycles 12 --interval-seconds 300
+python -m cli.main crypto-autopilot --symbols BTC,ETH --mode testnet --execute-top --auto-close --cycles 12 --interval-seconds 300
 ```
 
 Live execution requires all live guards:
 
 ```powershell
-python -m cli.main crypto-autopilot --symbols BTC,ETH --mode live --execute-top --allow-live --live-confirm I_UNDERSTAND_THIS_PLACES_REAL_HYPERLIQUID_ORDERS
+python -m cli.main crypto-autopilot --symbols BTC,ETH --mode live --execute-top --auto-close --allow-live --live-confirm I_UNDERSTAND_THIS_PLACES_REAL_HYPERLIQUID_ORDERS
 ```
 
 Live mode still will not submit orders unless:
@@ -47,8 +55,27 @@ Live mode still will not submit orders unless:
 - `--allow-live` is present
 - `--live-confirm` matches `TRADINGAGENTS_CRYPTO_LIVE_CONFIRM_PHRASE`
 - `RiskManager` approves the order intent
+- automatic exits are sent only as reduce-only SELL closes from the position
+  guardian; non-reduce-only SELL remains blocked
 - no emergency stop file exists
 - the official Hyperliquid SDK is installed and signer config passes diagnostics
+
+Position guardian defaults:
+
+```powershell
+$env:TRADINGAGENTS_CRYPTO_POSITION_GUARDIAN_ENABLED="true"
+$env:TRADINGAGENTS_CRYPTO_POSITION_GUARDIAN_CLOSE_ON_STOP="true"
+$env:TRADINGAGENTS_CRYPTO_POSITION_GUARDIAN_CLOSE_ON_TAKE_PROFIT="true"
+$env:TRADINGAGENTS_CRYPTO_POSITION_GUARDIAN_MAX_HOLDING_MINUTES="0"
+$env:TRADINGAGENTS_CRYPTO_POSITION_GUARDIAN_STRATEGY_EXIT_ENABLED="false"
+$env:TRADINGAGENTS_CRYPTO_POSITION_GUARDIAN_SKIP_ENTRIES_AFTER_CLOSE="true"
+```
+
+The guardian checks tracked long positions before each new scan. It can close
+when a stop-loss or take-profit is touched, when an optional max holding time is
+exceeded, or when the optional strategy-exit gate is enabled and the current
+scanner no longer supports the long. A close signal is not submitted unless the
+CLI includes `--auto-close`.
 
 For a 100 USDT starting account, set risk controls before any live run:
 

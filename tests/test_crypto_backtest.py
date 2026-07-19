@@ -327,6 +327,7 @@ def test_paper_queue_plan_uses_only_backtest_candidates():
     assert plan.items[0].command.startswith("python -m cli.main crypto-autopilot")
     assert "--mode paper" in plan.items[0].command
     assert "--execute-top" in plan.items[0].command
+    assert "--auto-close" in plan.items[0].command
     assert "--lookback 60" in plan.items[0].command
     assert "--interval 15m" in plan.items[0].command
     assert "--mode live" not in plan.items[0].command

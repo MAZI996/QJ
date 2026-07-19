@@ -97,8 +97,12 @@ class HyperliquidExecutionAdapter:
                 "Hyperliquid SDK execution is disabled: set "
                 "TRADINGAGENTS_CRYPTO_HYPERLIQUID_SDK_EXECUTION_ENABLED=true."
             )
-        if intent.side != "BUY":
-            return "Hyperliquid execution is currently long-only."
+        if intent.side == "SELL" and not intent.reduce_only:
+            return "Hyperliquid short selling is disabled; SELL must be reduce-only."
+        if intent.side == "BUY" and intent.reduce_only:
+            return "Hyperliquid BUY entries cannot be reduce-only."
+        if intent.side not in {"BUY", "SELL"}:
+            return "Hyperliquid execution only accepts BUY entries or reduce-only SELL exits."
         if self.config.hyperliquid_max_leverage > 1:
             return "Hyperliquid leverage must stay at 1 during this validation phase."
         if not self.config.hyperliquid_wallet_address:
@@ -115,7 +119,8 @@ class HyperliquidExecutionAdapter:
             if self.config.hyperliquid_testnet:
                 return "Hyperliquid config is still testnet; refusing live order."
             if (
-                self.config.hyperliquid_require_protective_orders
+                intent.side == "BUY"
+                and self.config.hyperliquid_require_protective_orders
                 and not self._can_place_protection(intent)
             ):
                 return (
@@ -138,6 +143,8 @@ class HyperliquidExecutionAdapter:
     def _submit(self, intent: OrderIntent) -> Any:
         exchange = self._exchange()
         coin = HyperliquidClient.normalize_symbol(intent.symbol)
+        if intent.side == "SELL":
+            return self._submit_reduce_only_close(exchange, coin, intent)
         if self._can_place_protection(intent):
             return exchange.bulk_orders(
                 self._bracket_orders(coin, intent),
@@ -149,6 +156,21 @@ class HyperliquidExecutionAdapter:
             intent.quantity,
             px=intent.entry_price,
             slippage=self.config.hyperliquid_market_slippage,
+        )
+
+    def _submit_reduce_only_close(self, exchange: Any, coin: str, intent: OrderIntent) -> Any:
+        slippage = max(0.0, self.config.hyperliquid_market_slippage)
+        return exchange.bulk_orders(
+            [
+                {
+                    "coin": coin,
+                    "is_buy": False,
+                    "sz": intent.quantity,
+                    "limit_px": _slippage_price(intent.entry_price, is_buy=False, slippage=slippage),
+                    "order_type": {"limit": {"tif": "Ioc"}},
+                    "reduce_only": True,
+                }
+            ]
         )
 
     def _exchange(self) -> Any:

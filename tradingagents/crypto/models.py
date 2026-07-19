@@ -93,6 +93,7 @@ class OrderIntent:
     stop_loss: float | None
     take_profit: float | None
     reason: str
+    reduce_only: bool = False
 
 
 @dataclass(frozen=True)

@@ -155,6 +155,7 @@ def _reviewed_signal(item: ReviewedSignal) -> dict[str, Any]:
                     "stop_loss": intent.stop_loss,
                     "take_profit": intent.take_profit,
                     "reason": intent.reason,
+                    "reduce_only": intent.reduce_only,
                 }
                 if intent
                 else None

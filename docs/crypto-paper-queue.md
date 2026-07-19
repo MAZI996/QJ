@@ -32,7 +32,8 @@ python -m cli.main crypto-paper-queue --mainnet --symbols BTC,HYPE --output repo
 - Queue items are generated only from backtest candidates.
 - Equivalent paper commands are de-duplicated. If two candidates differ only by
   historical holding-window metadata, the higher-ranked one is queued.
-- Generated commands use `--mode paper`.
+- Generated commands use `--mode paper --execute-top --auto-close`, so paper
+  validation covers both entries and reduce-only exit handling.
 - The TradingAgents workflow, AI review if requested, risk manager, and
   execution router still run before a paper fill can be recorded.
 - A queued paper candidate is not a live-trading approval.

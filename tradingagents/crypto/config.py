@@ -121,6 +121,13 @@ class CryptoTradingConfig:
     live_confirm_phrase: str = "I_UNDERSTAND_THIS_PLACES_REAL_HYPERLIQUID_ORDERS"
     state_dir: Path = Path.home() / ".tradingagents" / "crypto"
     emergency_stop_file: Path | None = None
+    position_guardian_enabled: bool = True
+    position_guardian_close_on_stop: bool = True
+    position_guardian_close_on_take_profit: bool = True
+    position_guardian_max_holding_minutes: int = 0
+    position_guardian_strategy_exit_enabled: bool = False
+    position_guardian_strategy_min_confidence: float = 0.50
+    position_guardian_skip_entries_after_close: bool = True
 
     @property
     def resolved_base_url(self) -> str:
@@ -289,5 +296,30 @@ class CryptoTradingConfig:
                 Path(os.getenv(prefix + "EMERGENCY_STOP_FILE", ""))
                 if os.getenv(prefix + "EMERGENCY_STOP_FILE")
                 else None
+            ),
+            position_guardian_enabled=_bool_env(prefix + "POSITION_GUARDIAN_ENABLED", True),
+            position_guardian_close_on_stop=_bool_env(
+                prefix + "POSITION_GUARDIAN_CLOSE_ON_STOP",
+                True,
+            ),
+            position_guardian_close_on_take_profit=_bool_env(
+                prefix + "POSITION_GUARDIAN_CLOSE_ON_TAKE_PROFIT",
+                True,
+            ),
+            position_guardian_max_holding_minutes=_int_env(
+                prefix + "POSITION_GUARDIAN_MAX_HOLDING_MINUTES",
+                0,
+            ),
+            position_guardian_strategy_exit_enabled=_bool_env(
+                prefix + "POSITION_GUARDIAN_STRATEGY_EXIT_ENABLED",
+                False,
+            ),
+            position_guardian_strategy_min_confidence=_float_env(
+                prefix + "POSITION_GUARDIAN_STRATEGY_MIN_CONFIDENCE",
+                0.50,
+            ),
+            position_guardian_skip_entries_after_close=_bool_env(
+                prefix + "POSITION_GUARDIAN_SKIP_ENTRIES_AFTER_CLOSE",
+                True,
             ),
         )

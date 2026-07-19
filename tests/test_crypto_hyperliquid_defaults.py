@@ -8,9 +8,10 @@ from tradingagents.crypto.execution import ExecutionRouter
 from tradingagents.crypto.hyperliquid_client import HyperliquidClient
 from tradingagents.crypto.hyperliquid_execution import HyperliquidExecutionAdapter
 from tradingagents.crypto.live_readiness import LiveReadinessChecker
-from tradingagents.crypto.models import OpportunitySignal, SymbolRules
+from tradingagents.crypto.models import OpportunitySignal, OrderIntent, SymbolRules
 from tradingagents.crypto.order_recovery import OrderRecoveryService
 from tradingagents.crypto.paper_status import summarize_paper_status
+from tradingagents.crypto.position_guardian import PositionGuardian
 from tradingagents.crypto.positions import PositionStore
 from tradingagents.crypto.risk import RiskManager
 
@@ -32,6 +33,8 @@ def test_crypto_config_defaults_to_hyperliquid(monkeypatch):
     assert config.hyperliquid_require_protective_orders is True
     assert config.entry_quality_enabled is True
     assert config.entry_quality_min_close_position == 0.55
+    assert config.position_guardian_enabled is True
+    assert config.position_guardian_strategy_exit_enabled is False
 
 
 def test_hyperliquid_risk_rejects_leverage_above_one():
@@ -114,6 +117,96 @@ def test_hyperliquid_live_requires_protective_orders():
     assert "protective stop/take-profit" in result
 
 
+def test_hyperliquid_rejects_non_reduce_only_sell():
+    config = replace(
+        CryptoTradingConfig(),
+        hyperliquid_sdk_execution_enabled=True,
+        hyperliquid_wallet_address="0x1111111111111111111111111111111111111111",
+        hyperliquid_private_key="0x" + "1" * 64,
+    )
+    sell_intent = replace(_intent(), side="SELL", reduce_only=False)
+
+    result = HyperliquidExecutionAdapter(config)._blocking_reason(
+        sell_intent,
+        mode="testnet",
+        live_confirmation="",
+    )
+
+    assert "short selling is disabled" in result
+
+
+def test_hyperliquid_reduce_only_sell_submits_close_order(monkeypatch):
+    config = replace(
+        CryptoTradingConfig(),
+        hyperliquid_sdk_execution_enabled=True,
+        hyperliquid_wallet_address="0x1111111111111111111111111111111111111111",
+        hyperliquid_private_key="0x" + "1" * 64,
+    )
+    orders = []
+
+    class FakeExchange:
+        def bulk_orders(self, payload, grouping=None):
+            orders.extend(payload)
+            return {"status": "ok", "orders": payload, "grouping": grouping}
+
+    monkeypatch.setattr("tradingagents.crypto.hyperliquid_execution._sdk_available", lambda: True)
+    monkeypatch.setattr(HyperliquidExecutionAdapter, "_exchange", lambda _self: FakeExchange())
+
+    sell_intent = OrderIntent(
+        symbol="BTC",
+        side="SELL",
+        quantity=0.25,
+        notional_usdt=25.0,
+        entry_price=100.0,
+        stop_loss=None,
+        take_profit=None,
+        reason="position_guardian:stop_loss_hit",
+        reduce_only=True,
+    )
+
+    result = HyperliquidExecutionAdapter(config).execute(sell_intent, mode="testnet")
+
+    assert result.accepted is True
+    assert orders == [
+        {
+            "coin": "BTC",
+            "is_buy": False,
+            "sz": 0.25,
+            "limit_px": 99.0,
+            "order_type": {"limit": {"tif": "Ioc"}},
+            "reduce_only": True,
+        }
+    ]
+
+
+def test_position_guardian_paper_closes_stop_loss_position(tmp_path):
+    config = replace(CryptoTradingConfig(), state_dir=tmp_path)
+    store = PositionStore.from_state_dir(tmp_path)
+    store.apply_fill(
+        symbol="BTC",
+        side="BUY",
+        quantity=0.25,
+        price=100.0,
+        stop_loss=95.0,
+        take_profit=110.0,
+        order_id="entry-1",
+        notes="test_entry",
+    )
+
+    result = PositionGuardian(
+        _FakeMarkClient({"BTC": 94.0}),
+        config,
+        positions=store,
+    ).run(mode="paper", execute=True)
+    record = PositionStore.from_state_dir(tmp_path).load()["BTC"]
+
+    assert result.accepted_closes[0].reason.startswith("stop_loss_hit")
+    assert result.accepted_closes[0].execution is not None
+    assert record.status == "CLOSED"
+    assert record.quantity == 0.0
+    assert record.realized_pnl_usdt == -1.5
+
+
 def test_hyperliquid_recovery_syncs_clearinghouse_position(tmp_path):
     config = replace(
         CryptoTradingConfig(),
@@ -168,6 +261,19 @@ def test_live_readiness_blocks_default_live_config(tmp_path):
     assert "sdk_execution_enabled" in failed_names
     assert "protective_orders_enabled" in failed_names
     assert "paper_evidence" in failed_names
+
+
+def test_live_readiness_requires_position_guardian_for_live(tmp_path):
+    config = replace(
+        CryptoTradingConfig(),
+        state_dir=tmp_path,
+        position_guardian_enabled=False,
+    )
+
+    report = LiveReadinessChecker(config).run(target="live")
+
+    failed_names = {check.name for check in report.failures}
+    assert "position_guardian_enabled" in failed_names
 
 
 def test_paper_readiness_allows_safe_default_with_warnings(tmp_path):
@@ -263,3 +369,11 @@ class _FakeHyperliquidRecoveryClient:
 
     def get_open_orders(self):
         return [{"coin": "BTC"}, {"coin": "ETH"}]
+
+
+class _FakeMarkClient:
+    def __init__(self, mids):
+        self.mids = mids
+
+    def get_all_mids(self):
+        return self.mids

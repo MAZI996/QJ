@@ -44,6 +44,7 @@ crypto 扩展沿用这个链路，但数据和约束换成：
 - `tradingagents/crypto/lana_strategy.py`：参考 Lana X 动态后的热度、涨幅/波动、固定止损候选层，OI 是我们额外加入的可选增强过滤。
 - `tradingagents/crypto/risk.py`：个人账户硬风控。
 - `tradingagents/crypto/execution.py`：`analysis/paper/testnet/live` 执行路由。
+- `tradingagents/crypto/position_guardian.py`：自动持仓守护和 reduce-only 平仓触发。
 - `tradingagents/crypto/agent_workflow.py`：TradingAgents 风格的 crypto 多角色 prompt。
 - `tradingagents/crypto/llm_router.py`：默认 LLM 与 Hermes 的模型路由边界。
 

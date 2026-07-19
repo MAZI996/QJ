@@ -261,6 +261,26 @@ class LiveReadinessChecker:
                             else "Emergency stop file is not configured."
                         ),
                     ),
+                    ReadinessCheck(
+                        "position_guardian_enabled",
+                        "PASS" if self.config.position_guardian_enabled else "FAIL",
+                        (
+                            "Position guardian is enabled for automatic reduce-only exits."
+                            if self.config.position_guardian_enabled
+                            else "Position guardian is disabled; live automation cannot auto-close positions."
+                        ),
+                    ),
+                    ReadinessCheck(
+                        "position_guardian_skip_entries",
+                        "PASS"
+                        if self.config.position_guardian_skip_entries_after_close
+                        else "WARN",
+                        (
+                            "Autopilot will skip new entries on cycles where a close signal appears."
+                            if self.config.position_guardian_skip_entries_after_close
+                            else "Autopilot may enter after a close signal in the same cycle."
+                        ),
+                    ),
                 ]
             )
         return tuple(checks)

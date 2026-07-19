@@ -41,7 +41,7 @@ python -m cli.main crypto-backtest --mainnet --symbols BTC,ETH,SOL,HYPE --interv
 python -m cli.main crypto-backtest-sweep --mainnet --symbols BTC,ETH,SOL,HYPE --intervals 5m,15m,1h --lookbacks 60,120 --max-holding-bars 16,32,48 --bars 500
 python -m cli.main crypto-backtest-sweep --mainnet --symbols BTC,ETH,SOL,HYPE --intervals 5m,15m,1h --lookbacks 60,120 --max-holding-bars 16,32,48 --bars 800 --min-trades 5 --min-win-rate 0.40 --min-return-pct 0 --max-drawdown-pct 5 --max-consecutive-losses 3 --candidates-only
 python -m cli.main crypto-paper-queue --mainnet --symbols BTC,ETH,SOL,HYPE --intervals 5m,15m,1h --lookbacks 60,120 --max-holding-bars 16,32,48 --bars 800 --min-trades 5 --min-win-rate 0.40 --min-return-pct 0 --max-drawdown-pct 5 --max-consecutive-losses 3
-python -m cli.main crypto-autopilot --symbols BTC,ETH,SOL,HYPE --mode paper --execute-top --cycles 0 --interval-seconds 300
+python -m cli.main crypto-autopilot --symbols BTC,ETH,SOL,HYPE --mode paper --execute-top --auto-close --cycles 0 --interval-seconds 300
 ```
 
 The scan path now includes the Hyperliquid market-quality gate by default:
@@ -94,6 +94,11 @@ Live execution requires all of these at the same time:
 If protective orders are required, the adapter submits a grouped Hyperliquid
 entry plus reduce-only take-profit and stop-loss triggers using the official
 SDK `bulk_orders(..., grouping="normalTpsl")` path.
+
+The position guardian can also submit active reduce-only SELL closes through
+the same official SDK boundary when `crypto-autopilot` is run with
+`--auto-close`. This close path is only for existing long positions; ordinary
+SELL and short selling remain blocked.
 
 ## Server Layout
 

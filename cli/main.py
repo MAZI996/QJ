@@ -1759,6 +1759,16 @@ def crypto_autopilot(
         "--execute-top",
         help="Execute only the top risk-approved signal each cycle.",
     ),
+    guard_positions: bool = typer.Option(
+        True,
+        "--guard-positions/--no-guard-positions",
+        help="Check open positions for stop/take-profit/timeout/strategy exit triggers.",
+    ),
+    auto_close: bool = typer.Option(
+        False,
+        "--auto-close/--no-auto-close",
+        help="Execute reduce-only close orders when the position guardian triggers.",
+    ),
     allow_live: bool = typer.Option(
         False,
         "--allow-live",
@@ -1827,6 +1837,8 @@ def crypto_autopilot(
         raise typer.BadParameter("interval-seconds must be at least 1.")
     if cycles < 0:
         raise typer.BadParameter("cycles must be 0 or a positive integer.")
+    if auto_close and not guard_positions:
+        raise typer.BadParameter("--auto-close requires --guard-positions.")
 
     config = CryptoTradingConfig.from_env()
     if interval:
@@ -1860,7 +1872,8 @@ def crypto_autopilot(
         Panel(
             (
                 f"mode={mode} | cycles={cycles} | interval={interval_seconds}s | "
-                f"execute_top={execute_top} | ai_review={ai_review}"
+                f"execute_top={execute_top} | auto_close={auto_close} | "
+                f"ai_review={ai_review}"
             ),
             title="Crypto Autopilot",
             border_style="green",
@@ -1880,11 +1893,15 @@ def crypto_autopilot(
             ai_review_enabled=ai_review,
             journal_dir=journal_dir,
             allow_live=allow_live,
+            guard_positions=guard_positions,
+            auto_close=auto_close,
         ):
             console.print(
                 f"[bold]Cycle {result.cycle}[/bold] action={result.final_action} "
                 f"top={result.top_symbol} stopped={result.stopped}"
             )
+            if result.position_guard is not None:
+                console.print(f"[dim]{result.position_guard.summary}[/dim]")
             console.print(f"[dim]{result.execution_message}[/dim]")
             if result.saved:
                 console.print(f"[green]Journal:[/green] {result.saved.jsonl_path}")
