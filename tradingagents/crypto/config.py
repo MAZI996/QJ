@@ -133,6 +133,8 @@ class CryptoTradingConfig:
     hermes_base_url: str = ""
     hermes_api_key: str = ""
     hermes_timeout_seconds: int = 45
+    hermes_cli_command: str = "hermes"
+    hermes_cli_timeout_seconds: int = 90
 
     execution_mode: ExecutionMode = "analysis"
     enable_live_orders: bool = False
@@ -356,6 +358,11 @@ class CryptoTradingConfig:
             hermes_base_url=os.getenv(prefix + "HERMES_BASE_URL", ""),
             hermes_api_key=os.getenv(prefix + "HERMES_API_KEY", ""),
             hermes_timeout_seconds=_int_env(prefix + "HERMES_TIMEOUT_SECONDS", 45),
+            hermes_cli_command=os.getenv(prefix + "HERMES_CLI_COMMAND", "hermes"),
+            hermes_cli_timeout_seconds=_int_env(
+                prefix + "HERMES_CLI_TIMEOUT_SECONDS",
+                90,
+            ),
             execution_mode=os.getenv(prefix + "EXECUTION_MODE", "analysis"),  # type: ignore[arg-type]
             enable_live_orders=_bool_env(prefix + "ENABLE_LIVE_ORDERS", False),
             live_confirm_phrase=os.getenv(

@@ -34,6 +34,12 @@ confidence at or above `TRADINGAGENTS_CRYPTO_AI_EXECUTION_MIN_CONFIDENCE`
 (default `0.62`). The selected candidate is then evaluated by `RiskManager`;
 only both approvals can reach `ExecutionRouter`.
 
+Hostinger Hermes Agent installations that expose the dashboard but not an
+OpenAI-compatible API should set
+`TRADINGAGENTS_CRYPTO_AI_ROUTER=hermes_cli`. This uses the local `hermes chat`
+single-query command without enabling toolsets. Keep `--execute-top` disabled
+until at least one analysis cycle records a successful AI review.
+
 Start the real-time stream first for unattended operation:
 
 ```powershell

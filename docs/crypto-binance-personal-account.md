@@ -64,6 +64,7 @@ TRADINGAGENTS_CRYPTO_EMERGENCY_STOP_FILE=C:\tradingagents-stop.txt
 
 - `TRADINGAGENTS_CRYPTO_AI_ROUTER=tradingagents`：当前默认路径，沿用项目已有 LLM factory。
 - `TRADINGAGENTS_CRYPTO_AI_ROUTER=hermes`：后期目标路径，当前按 OpenAI-compatible `/chat/completions` 适配。
+- `TRADINGAGENTS_CRYPTO_AI_ROUTER=hermes_cli`：调用本机已安装的 Hermes CLI 单次查询，不要求 HTTP API。
 - `TRADINGAGENTS_CRYPTO_AI_MODEL`：Hermes 要调用的大模型名称；选择 Hermes 时不能为空。
 - `TRADINGAGENTS_CRYPTO_HERMES_BASE_URL`：Hermes 服务地址，例如 `http://127.0.0.1:8000/v1`。
 - `TRADINGAGENTS_CRYPTO_HERMES_API_KEY`：Hermes 鉴权密钥，没有鉴权时留空。
