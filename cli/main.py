@@ -1769,6 +1769,21 @@ def crypto_autopilot(
         "--auto-close/--no-auto-close",
         help="Execute reduce-only close orders when the position guardian triggers.",
     ),
+    require_fresh_stream: bool = typer.Option(
+        True,
+        "--require-fresh-stream/--no-require-fresh-stream",
+        help="Stop autopilot entries when the local Hyperliquid WebSocket archive is stale or missing.",
+    ),
+    stream_max_age_seconds: int = typer.Option(
+        600,
+        "--stream-max-age-seconds",
+        help="Maximum accepted age for required WebSocket archive channels.",
+    ),
+    stream_archive_path: Optional[Path] = typer.Option(
+        None,
+        "--stream-archive-path",
+        help="Optional Hyperliquid WebSocket JSONL archive path.",
+    ),
     allow_live: bool = typer.Option(
         False,
         "--allow-live",
@@ -1839,6 +1854,8 @@ def crypto_autopilot(
         raise typer.BadParameter("cycles must be 0 or a positive integer.")
     if auto_close and not guard_positions:
         raise typer.BadParameter("--auto-close requires --guard-positions.")
+    if stream_max_age_seconds < 1:
+        raise typer.BadParameter("stream-max-age-seconds must be at least 1.")
 
     config = CryptoTradingConfig.from_env()
     if interval:
@@ -1873,7 +1890,7 @@ def crypto_autopilot(
             (
                 f"mode={mode} | cycles={cycles} | interval={interval_seconds}s | "
                 f"execute_top={execute_top} | auto_close={auto_close} | "
-                f"ai_review={ai_review}"
+                f"ai_review={ai_review} | require_fresh_stream={require_fresh_stream}"
             ),
             title="Crypto Autopilot",
             border_style="green",
@@ -1895,18 +1912,28 @@ def crypto_autopilot(
             allow_live=allow_live,
             guard_positions=guard_positions,
             auto_close=auto_close,
+            require_fresh_stream=require_fresh_stream,
+            stream_max_age_seconds=stream_max_age_seconds,
+            stream_archive_path=stream_archive_path,
         ):
             console.print(
                 f"[bold]Cycle {result.cycle}[/bold] action={result.final_action} "
                 f"top={result.top_symbol} stopped={result.stopped}"
             )
+            if result.stream_status is not None:
+                freshness = "fresh" if result.stream_status.fresh else "stale"
+                console.print(
+                    f"[dim]Stream {freshness}: events={result.stream_status.events_read} "
+                    f"latest={result.stream_status.latest_event_at or '-'}[/dim]"
+                )
             if result.position_guard is not None:
                 console.print(f"[dim]{result.position_guard.summary}[/dim]")
-            console.print(f"[dim]{result.execution_message}[/dim]")
+            execution_message = result.execution_message
+            console.print(f"[dim]{execution_message}[/dim]")
             if result.saved:
                 console.print(f"[green]Journal:[/green] {result.saved.jsonl_path}")
                 console.print(f"[dim]Report:[/dim] {result.saved.markdown_path}")
-            if result.stopped:
+            if result.stopped and result.reason != execution_message:
                 console.print(f"[yellow]{result.reason}[/yellow]")
     except CryptoAutoPilotSafetyError as exc:
         raise typer.BadParameter(str(exc)) from exc

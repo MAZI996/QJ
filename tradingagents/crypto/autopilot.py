@@ -13,6 +13,7 @@ from .decision_journal import DecisionJournalWrite, write_workflow_report
 from .engine import CryptoTradingEngine
 from .models import ExecutionMode
 from .position_guardian import PositionGuardian, PositionGuardResult
+from .stream_status import StreamStatusSummary, summarize_stream_status
 from .workflow_report import CryptoTradingAgentsWorkflow, CryptoWorkflowReport
 
 
@@ -28,6 +29,7 @@ class AutoPilotCycleResult:
     stopped: bool
     reason: str
     position_guard: PositionGuardResult | None = None
+    stream_status: StreamStatusSummary | None = None
 
     @property
     def final_action(self) -> str:
@@ -85,6 +87,9 @@ class CryptoAutoPilot:
         allow_live: bool = False,
         guard_positions: bool = True,
         auto_close: bool = False,
+        require_fresh_stream: bool = True,
+        stream_max_age_seconds: int = 600,
+        stream_archive_path: Path | None = None,
     ) -> Iterator[AutoPilotCycleResult]:
         mode = execution_mode or self.config.execution_mode
         self._validate_execution(mode, allow_live)
@@ -102,6 +107,9 @@ class CryptoAutoPilot:
                 journal_dir=journal_dir,
                 guard_positions=guard_positions,
                 auto_close=auto_close,
+                require_fresh_stream=require_fresh_stream,
+                stream_max_age_seconds=stream_max_age_seconds,
+                stream_archive_path=stream_archive_path,
             )
             yield result
             if result.stopped or (cycles > 0 and cycle >= cycles):
@@ -119,6 +127,9 @@ class CryptoAutoPilot:
         journal_dir: Path | None = None,
         guard_positions: bool = True,
         auto_close: bool = False,
+        require_fresh_stream: bool = True,
+        stream_max_age_seconds: int = 600,
+        stream_archive_path: Path | None = None,
     ) -> AutoPilotCycleResult:
         stop_reason = self._emergency_stop_reason()
         if stop_reason:
@@ -140,14 +151,35 @@ class CryptoAutoPilot:
             )
 
         mode = execution_mode or self.config.execution_mode
-        engine = CryptoTradingEngine(self.config)
+        engine: CryptoTradingEngine | None = None
         position_guard = None
         if guard_positions:
+            engine = CryptoTradingEngine(self.config)
             position_guard = PositionGuardian(engine.client, self.config).run(
                 mode=mode,
                 live_confirmation=live_confirmation,
                 execute=auto_close,
             )
+        stream_status = None
+        if require_fresh_stream:
+            stream_status = summarize_stream_status(
+                self.config,
+                symbols=symbols or self.config.symbols,
+                archive_path=stream_archive_path,
+                max_age_seconds=stream_max_age_seconds,
+            )
+            if not stream_status.fresh:
+                return AutoPilotCycleResult(
+                    cycle=cycle,
+                    report=None,
+                    saved=None,
+                    stopped=True,
+                    reason=_stream_stop_reason(stream_status),
+                    position_guard=position_guard,
+                    stream_status=stream_status,
+                )
+        if engine is None:
+            engine = CryptoTradingEngine(self.config)
         skip_entries = (
             position_guard is not None
             and bool(position_guard.close_signals)
@@ -175,6 +207,9 @@ class CryptoAutoPilot:
                 "position_guardian": (
                     position_guard.to_dict() if position_guard is not None else None
                 ),
+                "stream_freshness": (
+                    _stream_context(stream_status) if stream_status is not None else None
+                ),
                 "ai_review_requested": ai_review_enabled,
                 "strategy_fusion_enabled": self.config.strategy_fusion_enabled,
             },
@@ -186,6 +221,7 @@ class CryptoAutoPilot:
             stopped=False,
             reason="cycle completed",
             position_guard=position_guard,
+            stream_status=stream_status,
         )
 
     def _validate_execution(self, mode: ExecutionMode, allow_live: bool) -> None:
@@ -200,3 +236,34 @@ class CryptoAutoPilot:
         if stop_file and stop_file.exists():
             return f"Emergency stop file exists: {stop_file}"
         return ""
+
+
+def _stream_stop_reason(summary: StreamStatusSummary) -> str:
+    missing = ", ".join(
+        f"{row.symbol}:{row.channel}" for row in summary.missing_or_stale[:5]
+    )
+    suffix = f"; first missing/stale={missing}" if missing else ""
+    return (
+        "Hyperliquid WebSocket stream is stale or missing; "
+        "run crypto-hyperliquid-stream before autopilot entries"
+        f"{suffix}."
+    )
+
+
+def _stream_context(summary: StreamStatusSummary) -> dict[str, object]:
+    return {
+        "fresh": summary.fresh,
+        "events_read": summary.events_read,
+        "max_age_seconds": summary.max_age_seconds,
+        "latest_event_at": summary.latest_event_at,
+        "archive_paths": [str(path) for path in summary.archive_paths],
+        "missing_or_stale": [
+            {
+                "symbol": row.symbol,
+                "channel": row.channel,
+                "age_seconds": row.age_seconds,
+                "message": row.message,
+            }
+            for row in summary.missing_or_stale
+        ],
+    }

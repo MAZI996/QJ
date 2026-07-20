@@ -9,7 +9,7 @@ replacement engines.
 
 | Source | What We Absorb | Local Target | Status |
 | --- | --- | --- | --- |
-| Hyperliquid Python SDK | Official REST, WebSocket, account, and signed order flows | `hyperliquid_client.py`, `hyperliquid_execution.py`, `hyperliquid_stream.py`, `stream_status.py`, diagnostics | Stream freshness checks added |
+| Hyperliquid Python SDK | Official REST, WebSocket, account, and signed order flows | `hyperliquid_client.py`, `hyperliquid_execution.py`, `hyperliquid_stream.py`, `stream_status.py`, autopilot gate, diagnostics | Autopilot stream gate added |
 | Freqtrade | Dry-run discipline, backtesting, optimization, persistence, ops reporting | paper mode, paper status, performance summaries, live-readiness evidence | Pattern adopted |
 | Hummingbot | Connector abstraction, controller/executor split, market-making lessons | execution router, position guardian, market-quality gate | Planned |
 | Jesse | Strategy lifecycle from research to backtest to paper/live | scanner, strategy fusion, backtest, autopilot | Pattern adopted |
@@ -42,7 +42,9 @@ Absorb Hyperliquid SDK WebSocket examples first:
 
 The first archive layer is implemented in `tradingagents/crypto/hyperliquid_stream.py`.
 Freshness checks are implemented in `tradingagents/crypto/stream_status.py`.
-Both are documented in `docs/crypto-hyperliquid-realtime-stream.md`.
+Autopilot now requires fresh stream evidence by default before scanner/entry
+cycles continue. These layers are documented in
+`docs/crypto-hyperliquid-realtime-stream.md`.
 
 Freqtrade and Jesse influence this phase through dry-run evidence, strategy
 lifecycle discipline, and paper/live consistency.

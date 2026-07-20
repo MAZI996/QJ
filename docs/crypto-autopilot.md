@@ -7,7 +7,7 @@ and optionally executes only the top risk-approved signal in the selected mode.
 The default is intentionally safe:
 
 ```powershell
-python -m cli.main crypto-autopilot --symbols BTC,ETH,SOL,HYPE --mode analysis
+python -m cli.main crypto-autopilot --symbols BTC,ETH,SOL,HYPE --mode analysis --no-require-fresh-stream
 ```
 
 Defaults:
@@ -18,8 +18,22 @@ Defaults:
 - `--execute-top false`: no execution unless explicitly requested.
 - `--auto-close false`: position exits are inspected but reduce-only close
   orders are not submitted unless explicitly requested.
+- `--require-fresh-stream true`: new scans and entries stop when the local
+  Hyperliquid WebSocket archive is missing or stale.
 - `--fusion true`: high-star strategy fusion is enabled.
 - Reports are written to `TRADINGAGENTS_CRYPTO_STATE_DIR`.
+
+Start the real-time stream first for unattended operation:
+
+```powershell
+python -m cli.main crypto-hyperliquid-stream --mainnet --symbols BTC,ETH,SOL,HYPE --seconds 0
+```
+
+Check local stream freshness:
+
+```powershell
+python -m cli.main crypto-hyperliquid-stream-status --symbols BTC,ETH,SOL,HYPE --max-age-seconds 600
+```
 
 Service-style loop:
 
@@ -54,6 +68,7 @@ Live mode still will not submit orders unless:
 - `TRADINGAGENTS_CRYPTO_ENABLE_LIVE_ORDERS=true`
 - `--allow-live` is present
 - `--live-confirm` matches `TRADINGAGENTS_CRYPTO_LIVE_CONFIRM_PHRASE`
+- fresh Hyperliquid WebSocket archive evidence exists
 - `RiskManager` approves the order intent
 - automatic exits are sent only as reduce-only SELL closes from the position
   guardian; non-reduce-only SELL remains blocked

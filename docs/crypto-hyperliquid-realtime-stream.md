@@ -65,6 +65,10 @@ Required public evidence:
 Paper and testnet readiness warn when the stream evidence is missing or stale;
 live readiness fails until fresh stream events are present.
 
+`crypto-autopilot` also requires fresh stream evidence by default. Use
+`--no-require-fresh-stream` only for manual diagnostics where old REST polling
+is acceptable.
+
 ## Account Events
 
 Account events are disabled by default. Enable them only on the trading machine
@@ -91,7 +95,6 @@ still handled by the separate SDK execution adapter and live-readiness gates.
 
 The stream archive should next feed:
 
-- scanner/autopilot market inputs
 - paper-mode evidence windows and uptime summaries
 - position recovery comparisons
 - L2/order-book replay for hftbacktest-inspired validation
