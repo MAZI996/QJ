@@ -121,6 +121,11 @@ from .okx_client import (
     OKXTransportError,
 )
 from .okx_diagnostics import OKXDiagnosticReport, OKXDiagnostics
+from .okx_account_setup import (
+    OKXDemoAccountPreparer,
+    OKXDemoAccountSetupError,
+    OKXDemoAccountSetupResult,
+)
 from .okx_execution import (
     OKXExecutionAdapter,
     OKXExecutionCheck,
@@ -235,6 +240,9 @@ __all__ = [
     "OKXClient",
     "OKXDiagnosticReport",
     "OKXDiagnostics",
+    "OKXDemoAccountPreparer",
+    "OKXDemoAccountSetupError",
+    "OKXDemoAccountSetupResult",
     "OKXEventArchive",
     "OKXExecutionAdapter",
     "OKXExecutionCheck",

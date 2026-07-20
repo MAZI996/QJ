@@ -353,10 +353,41 @@ class OKXClient:
         )
         return [row for row in rows if isinstance(row, dict)]
 
-    def get_positions(self, symbol: str) -> list[dict[str, Any]]:
-        inst_id = self.instrument_id(symbol)
-        rows = self._signed_get("/api/v5/account/positions", {"instId": inst_id})
+    def get_positions(self, symbol: str | None = None) -> list[dict[str, Any]]:
+        params = {"instId": self.instrument_id(symbol)} if symbol else {}
+        rows = self._signed_get("/api/v5/account/positions", params)
         return [row for row in rows if isinstance(row, dict)]
+
+    def get_pending_orders(self) -> list[dict[str, Any]]:
+        rows = self._signed_get("/api/v5/trade/orders-pending", {})
+        return [row for row in rows if isinstance(row, dict)]
+
+    def set_position_mode(self, position_mode: str) -> dict[str, Any]:
+        rows = self._signed_post(
+            "/api/v5/account/set-position-mode",
+            {"posMode": position_mode},
+        )
+        if not rows or not isinstance(rows[0], dict):
+            raise OKXAPIError("No OKX position-mode acknowledgement returned.")
+        return rows[0]
+
+    def set_leverage(
+        self,
+        symbol: str,
+        leverage: int,
+        margin_mode: str,
+    ) -> dict[str, Any]:
+        rows = self._signed_post(
+            "/api/v5/account/set-leverage",
+            {
+                "instId": self.instrument_id(symbol),
+                "lever": str(leverage),
+                "mgnMode": margin_mode,
+            },
+        )
+        if not rows or not isinstance(rows[0], dict):
+            raise OKXAPIError("No OKX leverage acknowledgement returned.")
+        return rows[0]
 
     def place_order(self, params: Mapping[str, Any]) -> dict[str, Any]:
         rows = self._signed_post("/api/v5/trade/order", params)

@@ -166,7 +166,7 @@ class CryptoTradingConfig:
     def resolved_okx_base_url(self) -> str:
         if self.okx_base_url:
             return self.okx_base_url.rstrip("/")
-        return "https://www.okx.com"
+        return "https://openapi.okx.com"
 
     @property
     def resolved_okx_ws_public_url(self) -> str:

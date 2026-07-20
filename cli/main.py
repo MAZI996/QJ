@@ -2575,6 +2575,49 @@ def crypto_okx_demo_readiness(
     console.print(table)
 
 
+@app.command("crypto-okx-demo-prepare")
+def crypto_okx_demo_prepare(
+    symbol: str = typer.Option(
+        "BTC",
+        "--symbol",
+        help="OKX USDT perpetual coin to prepare at 1x leverage.",
+    ),
+    confirm: str = typer.Option(
+        "",
+        "--confirm",
+        help="Required confirmation phrase: PREPARE_OKX_DEMO.",
+    ),
+):
+    """Safely set an empty OKX demo account to net mode and 1x leverage."""
+
+    from dataclasses import replace
+
+    from tradingagents.crypto import (
+        CryptoTradingConfig,
+        OKXDemoAccountPreparer,
+        OKXDemoAccountSetupError,
+    )
+
+    if confirm != "PREPARE_OKX_DEMO":
+        raise typer.BadParameter("Pass --confirm PREPARE_OKX_DEMO to change demo settings.")
+    config = replace(CryptoTradingConfig.from_env(), exchange_provider="okx")
+    try:
+        result = OKXDemoAccountPreparer(config).prepare(symbol)
+    except OKXDemoAccountSetupError as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    console.print(
+        Panel(
+            (
+                f"symbol={result.symbol} | ready={result.readiness.ready} | "
+                f"position_mode_changed={result.position_mode_changed} | "
+                f"leverage_set={result.leverage_set}"
+            ),
+            title="OKX Demo Account Prepared",
+            border_style="green",
+        )
+    )
+
+
 @app.command("crypto-hyperliquid-check")
 def crypto_hyperliquid_check(
     symbol: str = typer.Option(

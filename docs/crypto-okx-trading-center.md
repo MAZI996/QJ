@@ -36,6 +36,10 @@ Create a demo-only key with trading permission and without withdrawal
 permission. Configure the OKX account in net position mode and set the selected
 USDT perpetual contract leverage to 1 before enabling execution.
 
+The default REST endpoint is the current official global API host,
+`https://openapi.okx.com`. Override `TRADINGAGENTS_CRYPTO_OKX_BASE_URL` only
+when the OKX account belongs to a region with a different official endpoint.
+
 ## Public Diagnostics
 
 ```powershell
@@ -57,6 +61,19 @@ $env:TRADINGAGENTS_CRYPTO_OKX_DEMO_EXECUTION_ENABLED = "true"
 $env:TRADINGAGENTS_CRYPTO_PROTECTIVE_OCO_ENABLED = "true"
 .\.venv\Scripts\python.exe -m cli.main crypto-okx-demo-readiness --symbol BTC
 ```
+
+If readiness reports `long_short_mode` or leverage above 1, first ensure the
+demo account has no positions and no pending orders, then run the guarded
+initializer:
+
+```powershell
+.\.venv\Scripts\python.exe -m cli.main crypto-okx-demo-prepare --symbol BTC --confirm PREPARE_OKX_DEMO
+```
+
+The initializer refuses real API mode, active emergency stops, accounts with
+positions, accounts with pending orders, keys without trade permission, and
+keys with withdrawal permission. It changes only the demo position mode and
+the selected perpetual's leverage.
 
 Readiness verifies the demo header, explicit execution switch, trade permission,
 absence of withdrawal permission, linear USDT perpetual metadata, net position
