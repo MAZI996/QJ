@@ -68,7 +68,12 @@ def test_stream_status_marks_stale_channels(tmp_path):
 def test_live_readiness_reports_realtime_stream_evidence(tmp_path):
     archive = tmp_path / "events" / "hyperliquid-ws-20260720.jsonl"
     _write_required_events(archive, datetime.now(UTC), symbol="BTC")
-    config = replace(CryptoTradingConfig(), state_dir=tmp_path, symbols=("BTC",))
+    config = replace(
+        CryptoTradingConfig(),
+        exchange_provider="hyperliquid",
+        state_dir=tmp_path,
+        symbols=("BTC",),
+    )
 
     report = LiveReadinessChecker(config).run(target="live")
     stream_check = next(check for check in report.checks if check.name == "realtime_stream_evidence")

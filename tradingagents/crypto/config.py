@@ -48,11 +48,19 @@ class CryptoTradingConfig:
 
     api_key: str = ""
     api_secret: str = ""
-    exchange_provider: str = "hyperliquid"
+    exchange_provider: str = "okx"
     testnet: bool = True
     base_url: str | None = None
     futures_base_url: str | None = None
     recv_window_ms: int = 5000
+    okx_base_url: str | None = None
+    okx_demo: bool = True
+    okx_api_key: str = ""
+    okx_api_secret: str = ""
+    okx_api_passphrase: str = ""
+    okx_inst_type: str = "SWAP"
+    okx_quote_ccy: str = "USDT"
+    okx_max_leverage: int = 1
     hyperliquid_base_url: str | None = None
     hyperliquid_testnet: bool = True
     hyperliquid_wallet_address: str = ""
@@ -63,7 +71,7 @@ class CryptoTradingConfig:
     hyperliquid_market_slippage: float = 0.01
     hyperliquid_require_protective_orders: bool = True
 
-    symbols: tuple[str, ...] = ("BTC", "ETH", "SOL", "HYPE")
+    symbols: tuple[str, ...] = ("BTC", "ETH", "SOL", "XRP")
     interval: str = "15m"
     lookback_limit: int = 120
 
@@ -118,7 +126,7 @@ class CryptoTradingConfig:
 
     execution_mode: ExecutionMode = "analysis"
     enable_live_orders: bool = False
-    live_confirm_phrase: str = "I_UNDERSTAND_THIS_PLACES_REAL_HYPERLIQUID_ORDERS"
+    live_confirm_phrase: str = "I_UNDERSTAND_THIS_PLACES_REAL_OKX_ORDERS"
     state_dir: Path = Path.home() / ".tradingagents" / "crypto"
     emergency_stop_file: Path | None = None
     position_guardian_enabled: bool = True
@@ -146,6 +154,12 @@ class CryptoTradingConfig:
         return "https://fapi.binance.com"
 
     @property
+    def resolved_okx_base_url(self) -> str:
+        if self.okx_base_url:
+            return self.okx_base_url.rstrip("/")
+        return "https://www.okx.com"
+
+    @property
     def resolved_hyperliquid_base_url(self) -> str:
         if self.hyperliquid_base_url:
             return self.hyperliquid_base_url.rstrip("/")
@@ -162,11 +176,22 @@ class CryptoTradingConfig:
                 "BINANCE_API_SECRET",
                 os.getenv(prefix + "BINANCE_API_SECRET", ""),
             ),
-            exchange_provider=os.getenv(prefix + "EXCHANGE_PROVIDER", "hyperliquid"),
+            exchange_provider=os.getenv(prefix + "EXCHANGE_PROVIDER", "okx"),
             testnet=_bool_env(prefix + "BINANCE_TESTNET", True),
             base_url=os.getenv(prefix + "BINANCE_BASE_URL") or None,
             futures_base_url=os.getenv(prefix + "BINANCE_FUTURES_BASE_URL") or None,
             recv_window_ms=_int_env(prefix + "BINANCE_RECV_WINDOW_MS", 5000),
+            okx_base_url=os.getenv(prefix + "OKX_BASE_URL") or None,
+            okx_demo=_bool_env(prefix + "OKX_DEMO", True),
+            okx_api_key=os.getenv("OKX_API_KEY", os.getenv(prefix + "OKX_API_KEY", "")),
+            okx_api_secret=os.getenv("OKX_API_SECRET", os.getenv(prefix + "OKX_API_SECRET", "")),
+            okx_api_passphrase=os.getenv(
+                "OKX_API_PASSPHRASE",
+                os.getenv(prefix + "OKX_API_PASSPHRASE", ""),
+            ),
+            okx_inst_type=os.getenv(prefix + "OKX_INST_TYPE", "SWAP").strip().upper() or "SWAP",
+            okx_quote_ccy=os.getenv(prefix + "OKX_QUOTE_CCY", "USDT").strip().upper() or "USDT",
+            okx_max_leverage=_int_env(prefix + "OKX_MAX_LEVERAGE", 1),
             hyperliquid_base_url=os.getenv(prefix + "HYPERLIQUID_BASE_URL") or None,
             hyperliquid_testnet=_bool_env(prefix + "HYPERLIQUID_TESTNET", True),
             hyperliquid_wallet_address=os.getenv(prefix + "HYPERLIQUID_WALLET_ADDRESS", ""),
@@ -188,7 +213,7 @@ class CryptoTradingConfig:
                 prefix + "HYPERLIQUID_REQUIRE_PROTECTIVE_ORDERS",
                 True,
             ),
-            symbols=_list_env(prefix + "SYMBOLS", ("BTC", "ETH", "SOL", "HYPE")),
+            symbols=_list_env(prefix + "SYMBOLS", ("BTC", "ETH", "SOL", "XRP")),
             interval=os.getenv(prefix + "INTERVAL", "15m"),
             lookback_limit=_int_env(prefix + "LOOKBACK_LIMIT", 120),
             account_equity_usdt=_float_env(prefix + "ACCOUNT_EQUITY_USDT", 10_000.0),
@@ -284,7 +309,7 @@ class CryptoTradingConfig:
             enable_live_orders=_bool_env(prefix + "ENABLE_LIVE_ORDERS", False),
             live_confirm_phrase=os.getenv(
                 prefix + "LIVE_CONFIRM_PHRASE",
-                "I_UNDERSTAND_THIS_PLACES_REAL_HYPERLIQUID_ORDERS",
+                "I_UNDERSTAND_THIS_PLACES_REAL_OKX_ORDERS",
             ),
             state_dir=Path(
                 os.getenv(

@@ -18,19 +18,23 @@ from tradingagents.crypto.positions import PositionStore
 from tradingagents.crypto.risk import RiskManager
 
 
-def test_crypto_config_defaults_to_hyperliquid(monkeypatch):
+def test_crypto_config_defaults_to_okx(monkeypatch):
     for key in (
         "TRADINGAGENTS_CRYPTO_EXCHANGE_PROVIDER",
         "TRADINGAGENTS_CRYPTO_SYMBOLS",
         "TRADINGAGENTS_CRYPTO_LIVE_CONFIRM_PHRASE",
+        "TRADINGAGENTS_CRYPTO_OKX_DEMO",
     ):
         monkeypatch.delenv(key, raising=False)
 
     config = CryptoTradingConfig.from_env()
 
-    assert config.exchange_provider == "hyperliquid"
-    assert config.symbols == ("BTC", "ETH", "SOL", "HYPE")
-    assert config.live_confirm_phrase == "I_UNDERSTAND_THIS_PLACES_REAL_HYPERLIQUID_ORDERS"
+    assert config.exchange_provider == "okx"
+    assert config.symbols == ("BTC", "ETH", "SOL", "XRP")
+    assert config.okx_demo is True
+    assert config.okx_inst_type == "SWAP"
+    assert config.okx_max_leverage == 1
+    assert config.live_confirm_phrase == "I_UNDERSTAND_THIS_PLACES_REAL_OKX_ORDERS"
     assert config.hyperliquid_sdk_execution_enabled is False
     assert config.hyperliquid_require_protective_orders is True
     assert config.entry_quality_enabled is True
@@ -40,7 +44,11 @@ def test_crypto_config_defaults_to_hyperliquid(monkeypatch):
 
 
 def test_hyperliquid_risk_rejects_leverage_above_one():
-    config = replace(CryptoTradingConfig(), hyperliquid_max_leverage=2)
+    config = replace(
+        CryptoTradingConfig(),
+        exchange_provider="hyperliquid",
+        hyperliquid_max_leverage=2,
+    )
     decision = RiskManager(config).evaluate(_signal(), _rules())
 
     assert decision.approved is False
@@ -48,7 +56,11 @@ def test_hyperliquid_risk_rejects_leverage_above_one():
 
 
 def test_hyperliquid_risk_accepts_valid_one_x_long_candidate():
-    config = replace(CryptoTradingConfig(), hyperliquid_max_leverage=1)
+    config = replace(
+        CryptoTradingConfig(),
+        exchange_provider="hyperliquid",
+        hyperliquid_max_leverage=1,
+    )
     decision = RiskManager(config).evaluate(_signal(), _rules())
 
     assert decision.approved is True
@@ -57,7 +69,7 @@ def test_hyperliquid_risk_accepts_valid_one_x_long_candidate():
 
 
 def test_hyperliquid_execution_blocks_when_sdk_flag_disabled(tmp_path):
-    config = replace(CryptoTradingConfig(), state_dir=tmp_path)
+    config = replace(CryptoTradingConfig(), exchange_provider="hyperliquid", state_dir=tmp_path)
     result = ExecutionRouter(client=object(), config=config).execute(
         _intent(),
         mode="testnet",
@@ -252,7 +264,7 @@ def test_hyperliquid_recovery_refuses_to_sync_short_position(tmp_path):
 
 
 def test_live_readiness_blocks_default_live_config(tmp_path):
-    config = replace(CryptoTradingConfig(), state_dir=tmp_path)
+    config = replace(CryptoTradingConfig(), exchange_provider="hyperliquid", state_dir=tmp_path)
 
     report = LiveReadinessChecker(config).run(target="live")
 
@@ -268,6 +280,7 @@ def test_live_readiness_blocks_default_live_config(tmp_path):
 def test_live_readiness_requires_position_guardian_for_live(tmp_path):
     config = replace(
         CryptoTradingConfig(),
+        exchange_provider="hyperliquid",
         state_dir=tmp_path,
         position_guardian_enabled=False,
     )
@@ -279,7 +292,7 @@ def test_live_readiness_requires_position_guardian_for_live(tmp_path):
 
 
 def test_paper_readiness_allows_safe_default_with_warnings(tmp_path):
-    config = replace(CryptoTradingConfig(), state_dir=tmp_path)
+    config = replace(CryptoTradingConfig(), exchange_provider="hyperliquid", state_dir=tmp_path)
 
     report = LiveReadinessChecker(config).run(target="paper")
 

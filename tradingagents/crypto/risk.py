@@ -22,6 +22,8 @@ class RiskManager:
         provider = self.config.exchange_provider.strip().lower()
         if signal.side != "BUY":
             rejected.append("当前第一阶段只允许做多候选，不做空")
+        if provider == "okx" and self.config.okx_max_leverage > 1:
+            rejected.append("OKX initial leverage cap must be 1")
         if provider == "hyperliquid" and self.config.hyperliquid_max_leverage > 1:
             rejected.append("Hyperliquid 初始阶段杠杆上限必须为 1")
         if signal.confidence < self.config.min_confidence:

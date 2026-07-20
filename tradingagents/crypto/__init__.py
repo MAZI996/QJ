@@ -110,6 +110,8 @@ from .hyperliquid_stream import (
     default_stream_archive_path,
     stream_event_from_message,
 )
+from .okx_client import OKXAPIError, OKXBookLevel, OKXClient, OKXInstrument, OKXOrderBook
+from .okx_diagnostics import OKXDiagnosticReport, OKXDiagnostics
 from .live_readiness import (
     LiveReadinessChecker,
     LiveReadinessReport,
@@ -202,6 +204,13 @@ __all__ = [
     "HyperliquidStreamRunSummary",
     "HyperliquidStreamService",
     "HyperliquidStreamSubscription",
+    "OKXAPIError",
+    "OKXBookLevel",
+    "OKXClient",
+    "OKXDiagnosticReport",
+    "OKXDiagnostics",
+    "OKXInstrument",
+    "OKXOrderBook",
     "LiveReadinessChecker",
     "LiveReadinessReport",
     "MarketQualityDecision",

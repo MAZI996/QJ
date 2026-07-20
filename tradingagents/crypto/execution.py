@@ -46,7 +46,8 @@ class ExecutionRouter:
             self.positions.apply_order_result(intent, result)
             return result
 
-        if self.config.exchange_provider.strip().lower() == "hyperliquid":
+        provider = self.config.exchange_provider.strip().lower()
+        if provider == "hyperliquid":
             result = self.hyperliquid_execution.execute(
                 intent,
                 selected_mode,
@@ -55,6 +56,19 @@ class ExecutionRouter:
             if selected_mode in {"testnet", "live"} and result.accepted:
                 self.positions.apply_order_result(intent, result)
             return result
+
+        if provider == "okx":
+            return OrderResult(
+                mode=selected_mode,
+                accepted=False,
+                symbol=intent.symbol,
+                side=intent.side,
+                quantity=intent.quantity,
+                message=(
+                    "OKX execution adapter is not enabled yet. "
+                    "Use analysis or paper mode until OKX demo order flow is implemented."
+                ),
+            )
 
         if selected_mode == "testnet":
             payload = self.client.test_market_order(intent.symbol, intent.side, intent.quantity)

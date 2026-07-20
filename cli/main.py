@@ -1261,7 +1261,7 @@ def crypto_scan(
     symbols: Optional[str] = typer.Option(
         None,
         "--symbols",
-        help="Comma-separated crypto symbols. Hyperliquid default examples: BTC,ETH,SOL,HYPE.",
+        help="Comma-separated crypto symbols. OKX default examples: BTC,ETH,SOL,XRP.",
     ),
     interval: Optional[str] = typer.Option(
         None,
@@ -1316,7 +1316,7 @@ def crypto_scan(
     market_quality: bool = typer.Option(
         True,
         "--market-quality/--no-market-quality",
-        help="Enable or disable the Hyperliquid spread/depth/funding quality gate.",
+        help="Enable or disable the venue-specific spread/depth/funding quality gate.",
     ),
     champion: bool = typer.Option(
         False,
@@ -1384,10 +1384,10 @@ def crypto_scan(
     console.print(
         Panel(
             (
-                f"模式: {mode} | 交易平台: {config.exchange_provider} | "
-                f"Hyperliquid Testnet: {config.hyperliquid_testnet} | 实盘开关: {config.enable_live_orders}"
+                f"Mode: {mode} | Exchange: {config.exchange_provider} | "
+                f"OKX demo: {config.okx_demo} | Live switch: {config.enable_live_orders}"
             ),
-            title="Crypto 个人账户扫描",
+            title="Crypto Scan",
             border_style="cyan",
         )
     )
@@ -1469,7 +1469,7 @@ def crypto_workflow(
     symbols: Optional[str] = typer.Option(
         None,
         "--symbols",
-        help="Comma-separated crypto symbols. Hyperliquid default examples: BTC,ETH,SOL,HYPE.",
+        help="Comma-separated crypto symbols. OKX default examples: BTC,ETH,SOL,XRP.",
     ),
     interval: Optional[str] = typer.Option(
         None,
@@ -1727,7 +1727,7 @@ def crypto_autopilot(
     symbols: Optional[str] = typer.Option(
         None,
         "--symbols",
-        help="Comma-separated crypto symbols. Hyperliquid default examples: BTC,ETH,SOL,HYPE.",
+        help="Comma-separated crypto symbols. OKX default examples: BTC,ETH,SOL,XRP.",
     ),
     interval: Optional[str] = typer.Option(
         None,
@@ -2148,6 +2148,10 @@ def crypto_recover_orders(
 
     config = CryptoTradingConfig.from_env()
     provider = config.exchange_provider.strip().lower()
+    if provider == "okx":
+        raise typer.BadParameter(
+            "OKX order/position recovery is not implemented yet; use diagnostics only."
+        )
     if provider == "hyperliquid":
         if mainnet:
             config = replace(config, hyperliquid_testnet=False)
@@ -2293,7 +2297,12 @@ def crypto_account():
 
     config = CryptoTradingConfig.from_env()
     engine = CryptoTradingEngine(config)
-    balances = engine.account_balances()
+    account_error = ""
+    try:
+        balances = engine.account_balances()
+    except Exception as exc:
+        balances = []
+        account_error = str(exc)
 
     table = Table(title=f"{config.exchange_provider} 个人账户余额", box=box.SIMPLE_HEAVY)
     table.add_column("资产", style="bold")
@@ -2310,11 +2319,18 @@ def crypto_account():
                 f"Hyperliquid Testnet: {config.hyperliquid_testnet}"
             )
             if config.exchange_provider.strip().lower() == "hyperliquid"
-            else f"Base URL: {config.resolved_base_url} | Testnet: {config.testnet}",
+            else (
+                f"OKX URL: {config.resolved_okx_base_url} | "
+                f"OKX demo: {config.okx_demo} | Inst type: {config.okx_inst_type}"
+                if config.exchange_provider.strip().lower() == "okx"
+                else f"Base URL: {config.resolved_base_url} | Testnet: {config.testnet}"
+            ),
             title="账户连接",
             border_style="cyan",
         )
     )
+    if account_error:
+        console.print(f"[yellow]Account balance unavailable:[/yellow] {account_error}")
     console.print(table)
 
 
@@ -2384,6 +2400,135 @@ def crypto_binance_check(
             f"[{status_style}]{step.status}[/{status_style}]",
             step.message,
             detail,
+        )
+    console.print(table)
+
+
+@app.command("crypto-okx-check")
+def crypto_okx_check(
+    symbol: str = typer.Option(
+        "BTC",
+        "--symbol",
+        help="OKX coin or instrument to validate, e.g. BTC or BTC-USDT-SWAP.",
+    ),
+    inst_type: str = typer.Option(
+        "SWAP",
+        "--inst-type",
+        help="OKX instrument type: SWAP or SPOT.",
+    ),
+    demo: bool = typer.Option(
+        True,
+        "--demo/--live-api",
+        help="Use OKX simulated-trading header or live API public data.",
+    ),
+    include_balance: bool = typer.Option(
+        False,
+        "--include-balance/--no-include-balance",
+        help="Run signed read-only balance check; requires OKX API credentials.",
+    ),
+):
+    """Run safe OKX trading-center diagnostics."""
+
+    from dataclasses import replace
+
+    from tradingagents.crypto import CryptoTradingConfig, OKXDiagnostics
+
+    normalized_inst_type = inst_type.strip().upper()
+    if normalized_inst_type not in {"SPOT", "SWAP"}:
+        raise typer.BadParameter("inst-type must be SPOT or SWAP.")
+
+    config = replace(
+        CryptoTradingConfig.from_env(),
+        exchange_provider="okx",
+        okx_demo=demo,
+        okx_inst_type=normalized_inst_type,
+    )
+    report = OKXDiagnostics(config).run(symbol=symbol, include_balance=include_balance)
+    color = "green" if report.ok else "red"
+    console.print(
+        Panel(
+            (
+                f"base={report.base_url} | demo={report.demo} | "
+                f"inst_type={report.inst_type} | key={report.api_key_present} | "
+                f"secret={report.api_secret_present} | passphrase={report.api_passphrase_present}"
+            ),
+            title="OKX Diagnostics",
+            border_style=color,
+        )
+    )
+    table = Table(title=f"OKX Check: {report.symbol}", box=box.SIMPLE_HEAVY)
+    table.add_column("Step", style="bold")
+    table.add_column("Status")
+    table.add_column("Message")
+    table.add_column("Details")
+    for step in report.steps:
+        status_style = {
+            "PASS": "green",
+            "WARN": "yellow",
+            "FAIL": "red",
+            "SKIP": "dim",
+        }.get(step.status, "white")
+        detail = ", ".join(f"{key}={value}" for key, value in step.details.items())
+        table.add_row(
+            step.name,
+            f"[{status_style}]{step.status}[/{status_style}]",
+            step.message,
+            detail,
+        )
+    console.print(table)
+
+
+@app.command("crypto-okx-markets")
+def crypto_okx_markets(
+    inst_type: str = typer.Option(
+        "SWAP",
+        "--inst-type",
+        help="OKX instrument type: SWAP or SPOT.",
+    ),
+    demo: bool = typer.Option(
+        True,
+        "--demo/--live-api",
+        help="Use OKX simulated-trading header or live API public data.",
+    ),
+    limit: int = typer.Option(
+        25,
+        "--limit",
+        help="Maximum instruments to show.",
+    ),
+):
+    """Show OKX instrument metadata."""
+
+    from dataclasses import replace
+
+    from tradingagents.crypto import CryptoTradingConfig, OKXClient
+
+    normalized_inst_type = inst_type.strip().upper()
+    if normalized_inst_type not in {"SPOT", "SWAP"}:
+        raise typer.BadParameter("inst-type must be SPOT or SWAP.")
+    config = replace(
+        CryptoTradingConfig.from_env(),
+        exchange_provider="okx",
+        okx_demo=demo,
+        okx_inst_type=normalized_inst_type,
+    )
+    instruments = OKXClient(config).get_instruments(normalized_inst_type)
+    table = Table(title=f"OKX Markets: {config.resolved_okx_base_url} ({normalized_inst_type})")
+    table.add_column("Instrument", style="bold")
+    table.add_column("Base")
+    table.add_column("Quote")
+    table.add_column("Settle")
+    table.add_column("Min Size", justify="right")
+    table.add_column("Lot Size", justify="right")
+    table.add_column("Tick Size", justify="right")
+    for instrument in instruments[:limit]:
+        table.add_row(
+            instrument.inst_id,
+            instrument.base_ccy,
+            instrument.quote_ccy,
+            instrument.settle_ccy,
+            f"{instrument.min_size:g}",
+            f"{instrument.lot_size:g}",
+            f"{instrument.tick_size:g}",
         )
     console.print(table)
 

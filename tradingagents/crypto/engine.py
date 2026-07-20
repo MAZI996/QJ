@@ -8,6 +8,7 @@ from .binance_client import BinanceClient
 from .config import CryptoTradingConfig
 from .execution import ExecutionRouter
 from .hyperliquid_client import HyperliquidClient
+from .okx_client import OKXClient
 from .market_quality import MarketQualityGate
 from .models import (
     AccountBalance,
@@ -41,7 +42,10 @@ class CryptoTradingEngine:
         self.execution = ExecutionRouter(self.client, self.config)
 
     def _create_client(self):
-        if self.config.exchange_provider.strip().lower() == "hyperliquid":
+        provider = self.config.exchange_provider.strip().lower()
+        if provider == "okx":
+            return OKXClient(self.config)
+        if provider == "hyperliquid":
             return HyperliquidClient(self.config)
         return BinanceClient(self.config)
 

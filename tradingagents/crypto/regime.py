@@ -8,7 +8,9 @@ from statistics import mean
 from typing import Any
 
 from .config import CryptoTradingConfig
+from .binance_client import BinanceClient
 from .hyperliquid_client import HyperliquidClient
+from .okx_client import OKXClient
 from .models import Candle
 
 
@@ -94,7 +96,7 @@ class RegimeEngine:
 
     def __init__(self, config: CryptoTradingConfig | None = None, client=None):
         self.config = config or CryptoTradingConfig.from_env()
-        self.client = client or HyperliquidClient(self.config)
+        self.client = client or _default_regime_client(self.config)
 
     def assess(
         self,
@@ -179,6 +181,15 @@ def _symbol_snapshot(symbol: str, candles: list[Candle]) -> RegimeSymbolSnapshot
         quote_volume_usdt=quote_volume,
         heat_score=heat_score,
     )
+
+
+def _default_regime_client(config: CryptoTradingConfig):
+    provider = config.exchange_provider.strip().lower()
+    if provider == "okx":
+        return OKXClient(config)
+    if provider == "hyperliquid":
+        return HyperliquidClient(config)
+    return BinanceClient(config)
 
 
 def _classify_regime(
