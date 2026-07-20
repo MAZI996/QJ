@@ -9,7 +9,7 @@ replacement engines.
 
 | Source | What We Absorb | Local Target | Status |
 | --- | --- | --- | --- |
-| Hyperliquid Python SDK | Official REST, WebSocket, account, and signed order flows | `hyperliquid_client.py`, `hyperliquid_execution.py`, diagnostics | Partially adopted |
+| Hyperliquid Python SDK | Official REST, WebSocket, account, and signed order flows | `hyperliquid_client.py`, `hyperliquid_execution.py`, `hyperliquid_stream.py`, diagnostics | WebSocket archive added |
 | Freqtrade | Dry-run discipline, backtesting, optimization, persistence, ops reporting | paper mode, paper status, performance summaries, live-readiness evidence | Pattern adopted |
 | Hummingbot | Connector abstraction, controller/executor split, market-making lessons | execution router, position guardian, market-quality gate | Planned |
 | Jesse | Strategy lifecycle from research to backtest to paper/live | scanner, strategy fusion, backtest, autopilot | Pattern adopted |
@@ -39,6 +39,9 @@ Absorb Hyperliquid SDK WebSocket examples first:
 - `userEvents` and fill recovery for the configured wallet.
 - Local event archive under `TRADINGAGENTS_CRYPTO_STATE_DIR`.
 - Paper/autopilot reports that prove enough cycles before testnet or live.
+
+The first archive layer is implemented in `tradingagents/crypto/hyperliquid_stream.py`
+and documented in `docs/crypto-hyperliquid-realtime-stream.md`.
 
 Freqtrade and Jesse influence this phase through dry-run evidence, strategy
 lifecycle discipline, and paper/live consistency.

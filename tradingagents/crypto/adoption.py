@@ -38,8 +38,8 @@ GITHUB_ADOPTION_SOURCES: tuple[SourceAdoption, ...] = (
             "tradingagents/crypto/hyperliquid_execution.py",
             "tradingagents/crypto/hyperliquid_diagnostics.py",
         ),
-        status="partially_adopted",
-        next_step="Add a persistent WebSocket stream for l2Book, trades, userEvents, and fills.",
+        status="websocket_archive_added",
+        next_step="Feed the WebSocket event archive into scanner freshness checks and paper evidence.",
         guardrail="Use API wallets only; keep live orders behind readiness, confirmation, and protective orders.",
     ),
     SourceAdoption(

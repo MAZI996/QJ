@@ -2588,6 +2588,93 @@ def crypto_market_quality(
     console.print(table)
 
 
+@app.command("crypto-hyperliquid-stream")
+def crypto_hyperliquid_stream(
+    symbols: str = typer.Option(
+        "BTC,ETH,SOL,HYPE",
+        "--symbols",
+        help="Comma-separated Hyperliquid coins to stream.",
+    ),
+    mainnet: bool = typer.Option(
+        False,
+        "--mainnet",
+        help="Use https://api.hyperliquid.xyz instead of the default testnet URL.",
+    ),
+    seconds: int = typer.Option(
+        60,
+        "--seconds",
+        help="Seconds to run. Use 0 for an uninterrupted service loop.",
+    ),
+    interval: Optional[str] = typer.Option(
+        None,
+        "--interval",
+        help="Candle interval subscription. Defaults to config interval.",
+    ),
+    user_events: bool = typer.Option(
+        False,
+        "--user-events/--no-user-events",
+        help="Also subscribe to wallet userEvents, fills, order updates, and funding events.",
+    ),
+    archive_path: Optional[Path] = typer.Option(
+        None,
+        "--archive-path",
+        help="Optional JSONL path. Defaults to TRADINGAGENTS_CRYPTO_STATE_DIR/events.",
+    ),
+):
+    """Archive Hyperliquid WebSocket events for real-time analysis."""
+
+    from dataclasses import replace
+
+    from tradingagents.crypto import (
+        CryptoTradingConfig,
+        HyperliquidEventArchive,
+        HyperliquidStreamError,
+        HyperliquidStreamService,
+    )
+
+    selected = tuple(item.strip().upper() for item in symbols.split(",") if item.strip())
+    config = replace(CryptoTradingConfig.from_env(), exchange_provider="hyperliquid")
+    if mainnet:
+        config = replace(config, hyperliquid_testnet=False)
+    archive = HyperliquidEventArchive(archive_path) if archive_path else None
+    service = HyperliquidStreamService(
+        config,
+        symbols=selected,
+        interval=interval,
+        archive=archive,
+    )
+    try:
+        planned = service.subscription_plan(user_events=user_events)
+    except HyperliquidStreamError as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    console.print(
+        Panel(
+            (
+                f"base={config.resolved_hyperliquid_base_url} | "
+                f"symbols={','.join(selected)} | interval={interval or config.interval} | "
+                f"subscriptions={len(planned)} | user_events={user_events} | seconds={seconds}"
+            ),
+            title="Hyperliquid WebSocket Stream",
+            border_style="cyan",
+        )
+    )
+    try:
+        summary = service.run(duration_seconds=seconds, user_events=user_events)
+    except HyperliquidStreamError as exc:
+        raise typer.BadParameter(str(exc)) from exc
+
+    console.print(
+        Panel(
+            (
+                f"subscriptions={summary.subscriptions} | events={summary.events} | "
+                f"archive={summary.archive_path}"
+            ),
+            title="Stream Archive Summary",
+            border_style="green",
+        )
+    )
+
+
 @app.command("crypto-regime")
 def crypto_regime(
     symbols: str = typer.Option(

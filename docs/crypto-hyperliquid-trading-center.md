@@ -10,6 +10,9 @@ For the no-Longxia direct integration runbook, see
 For the seven-source GitHub absorption map, see
 `docs/crypto-github-absorption.md`.
 
+For the Hyperliquid WebSocket archive runbook, see
+`docs/crypto-hyperliquid-realtime-stream.md`.
+
 ## Safe Configuration
 
 Do not paste private keys into chat. Put them only on the server that runs the

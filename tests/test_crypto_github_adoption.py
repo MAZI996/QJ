@@ -26,7 +26,7 @@ def test_github_adoption_sources_have_local_targets_and_guardrails():
 def test_hyperliquid_sdk_remains_primary_venue_adoption():
     source = adoption_by_key("hyperliquid-python-sdk")
 
-    assert source.status == "partially_adopted"
+    assert source.status == "websocket_archive_added"
     assert "Primary venue adapter" in source.adoption_target
     assert "WebSocket" in source.next_step
     assert "live orders" in source.guardrail
