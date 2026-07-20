@@ -7,8 +7,7 @@ but execution still has to pass the deterministic risk gate.
 from __future__ import annotations
 
 from .agent_workflow import build_tradingagents_crypto_prompt
-from .engine import ReviewedSignal
-from .models import AITradeReview
+from .models import AITradeReview, OpportunitySignal
 
 
 class CryptoAIAdvisor:
@@ -17,11 +16,11 @@ class CryptoAIAdvisor:
         self.router = router
         self.model = model
 
-    def review(self, reviewed: list[ReviewedSignal]) -> str:
-        return self.review_structured(reviewed).raw_response
+    def review(self, candidates: list[OpportunitySignal]) -> str:
+        return self.review_structured(candidates).raw_response
 
-    def review_structured(self, reviewed: list[ReviewedSignal]) -> AITradeReview:
-        prompt = build_tradingagents_crypto_prompt(reviewed)
+    def review_structured(self, candidates: list[OpportunitySignal]) -> AITradeReview:
+        prompt = build_tradingagents_crypto_prompt(candidates)
         response = self.llm.invoke(prompt)
         text = getattr(response, "content", str(response))
         return _parse_text_review(text, router=self.router, model=self.model)
@@ -44,6 +43,9 @@ def _parse_text_review(text: str, router: str, model: str) -> AITradeReview:
     except ValueError:
         confidence = 0.0
     confidence = max(0.0, min(confidence, 1.0))
+    symbol = fields.get("symbol", "").strip().upper()
+    if symbol in {"", "NONE", "NULL", "N/A", "-"}:
+        symbol = None
 
     return AITradeReview(
         action=action,  # type: ignore[arg-type]
@@ -54,5 +56,6 @@ def _parse_text_review(text: str, router: str, model: str) -> AITradeReview:
         role_notes=fields.get("role notes", ""),
         model=model,
         router=router,
+        symbol=symbol,
         raw_response=text,
     )

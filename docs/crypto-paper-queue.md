@@ -43,7 +43,7 @@ Run the stream service before paper loops:
 
 ```powershell
 python -m cli.main crypto-hyperliquid-stream --mainnet --symbols BTC,ETH,SOL,HYPE --seconds 0
-python -m cli.main crypto-autopilot --symbols BTC,ETH,SOL,HYPE --mode paper --execute-top --auto-close --cycles 0 --interval-seconds 300
+python -m cli.main crypto-autopilot --symbols BTC,ETH,SOL,HYPE --mode paper --ai-review --execute-top --auto-close --cycles 0 --interval-seconds 300
 ```
 
 ## Safety Boundary

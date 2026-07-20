@@ -13,6 +13,8 @@ but new market-data and execution work should target OKX first.
 - Live orders: hard blocked; the OKX adapter accepts demo `testnet` mode only
 - Strategy path: scanner -> TradingAgents AI review -> risk manager -> execution router
 - LLM/Hermes can review signals, but cannot bypass deterministic risk checks
+- `--execute-top` requires Hermes to return `BUY`, an exact candidate symbol,
+  and confidence of at least `0.62` before deterministic risk is evaluated
 
 ## Environment
 
@@ -85,7 +87,7 @@ When readiness is green, a guarded unattended demo loop is available through
 the existing TradingAgents chain:
 
 ```powershell
-.\.venv\Scripts\python.exe -m cli.main crypto-autopilot --symbols BTC,ETH,SOL,XRP --mode testnet --execute-top --auto-close --cycles 12 --interval-seconds 300
+.\.venv\Scripts\python.exe -m cli.main crypto-autopilot --symbols BTC,ETH,SOL,XRP --mode testnet --ai-review --execute-top --auto-close --cycles 12 --interval-seconds 300
 ```
 
 BUY intents are converted from base-coin quantity to OKX contract size and are
@@ -131,6 +133,12 @@ The OKX freshness gate currently requires these per-symbol channels:
 The stream also subscribes to `trades`, but trade messages are event-triggered
 and not required for freshness because quiet/demo markets may not emit them
 within every short check window.
+
+The stream sends heartbeats, reconnects each OKX endpoint independently with
+bounded exponential backoff, and resubscribes when a required symbol/channel
+has produced no data for 120 seconds. Candle freshness allows a minimum
+120-second delivery tolerance; ticker and book checks keep the configured
+maximum age.
 
 Autopilot now uses provider-aware stream evidence. With the default OKX provider,
 `crypto-autopilot --require-fresh-stream` expects fresh `okx-ws-*.jsonl` archive

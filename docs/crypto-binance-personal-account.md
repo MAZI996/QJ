@@ -118,14 +118,14 @@ python -m cli.main crypto-scan --symbols BTCUSDT,ETHUSDT --mode analysis
 python -m cli.main crypto-scan --symbols BTCUSDT,ETHUSDT,SOLUSDT --hot-symbols SOLUSDT --mode analysis
 python -m cli.main crypto-scan --symbols BTCUSDT,ETHUSDT --mode analysis --ai-review
 python -m cli.main crypto-autopilot --symbols BTCUSDT,ETHUSDT,SOLUSDT --mode analysis
-python -m cli.main crypto-autopilot --symbols BTCUSDT,ETHUSDT --mode paper --execute-top --cycles 0 --interval-seconds 300
+python -m cli.main crypto-autopilot --symbols BTCUSDT,ETHUSDT --mode paper --ai-review --execute-top --cycles 0 --interval-seconds 300
 python -m cli.main crypto-positions
 python -m cli.main crypto-performance
 python -m cli.main crypto-protective-plan
 python -m cli.main crypto-recover-orders --symbols BTCUSDT,ETHUSDT
 python -m cli.main crypto-hermes-check
-python -m cli.main crypto-scan --symbols BTCUSDT,ETHUSDT --mode paper --execute-top
-python -m cli.main crypto-scan --symbols BTCUSDT --mode testnet --execute-top
+python -m cli.main crypto-scan --symbols BTCUSDT,ETHUSDT --mode paper --ai-review --execute-top
+python -m cli.main crypto-scan --symbols BTCUSDT --mode testnet --ai-review --execute-top
 ```
 
 真实下单需要同时满足：

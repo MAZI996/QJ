@@ -128,6 +128,7 @@ class CryptoTradingConfig:
     ai_router: str = "tradingagents"
     ai_model: str = ""
     ai_decision_policy: str = "advisory_only"
+    ai_execution_min_confidence: float = 0.62
     ai_agent_style: str = "tradingagents_crypto"
     hermes_base_url: str = ""
     hermes_api_key: str = ""
@@ -347,6 +348,10 @@ class CryptoTradingConfig:
             ai_router=os.getenv(prefix + "AI_ROUTER", "tradingagents"),
             ai_model=os.getenv(prefix + "AI_MODEL", ""),
             ai_decision_policy=os.getenv(prefix + "AI_DECISION_POLICY", "advisory_only"),
+            ai_execution_min_confidence=_float_env(
+                prefix + "AI_EXECUTION_MIN_CONFIDENCE",
+                0.62,
+            ),
             ai_agent_style=os.getenv(prefix + "AI_AGENT_STYLE", "tradingagents_crypto"),
             hermes_base_url=os.getenv(prefix + "HERMES_BASE_URL", ""),
             hermes_api_key=os.getenv(prefix + "HERMES_API_KEY", ""),

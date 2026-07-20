@@ -40,6 +40,8 @@ class AutoPilotCycleResult:
         approved = self.report.approved
         if not approved:
             return "REJECT"
+        if self.report.execution_requested and self.report.execution_gate_reason:
+            return "HOLD"
         if self.report.ai_review and self.report.ai_review.action != "BUY":
             return "HOLD"
         return "BUY"
@@ -48,6 +50,8 @@ class AutoPilotCycleResult:
     def top_symbol(self) -> str:
         if self.report is None or not self.report.approved:
             return "-"
+        if self.report.ai_review and self.report.ai_review.symbol:
+            return self.report.ai_review.symbol
         return self.report.approved[0].signal.symbol
 
     @property
@@ -62,6 +66,8 @@ class AutoPilotCycleResult:
             return self.position_guard.summary
         if self.report is None:
             return self.reason
+        if self.report.execution_gate_reason:
+            return self.report.execution_gate_reason
         for item in self.report.reviewed:
             if item.execution:
                 return item.execution.message

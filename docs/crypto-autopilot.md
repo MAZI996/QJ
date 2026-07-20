@@ -2,7 +2,7 @@
 
 `crypto-autopilot` is the unattended loop for the crypto extension. It
 repeatedly runs the TradingAgents crypto workflow, writes the decision journal,
-and optionally executes only the top risk-approved signal in the selected mode.
+and optionally executes only the Hermes-selected, risk-approved signal.
 
 2026-07-20 update: OKX is the default provider. The fresh-stream gate is now
 provider-aware: OKX expects `okx-ws-*.jsonl`, while the legacy Hyperliquid route
@@ -20,12 +20,19 @@ Defaults:
 - `--interval-seconds 300`: five minutes between cycles when multiple cycles run.
 - `--mode analysis`: no order submission.
 - `--execute-top false`: no execution unless explicitly requested.
+- `--ai-review false`: optional for analysis, but `--execute-top` is rejected
+  unless `--ai-review` is also present.
 - `--auto-close false`: position exits are inspected but reduce-only close
   orders are not submitted unless explicitly requested.
 - `--require-fresh-stream true`: new scans and entries stop when the configured
   exchange WebSocket archive is missing or stale.
 - `--fusion true`: high-star strategy fusion is enabled.
 - Reports are written to `TRADINGAGENTS_CRYPTO_STATE_DIR`.
+
+For execution, Hermes must return `BUY`, an exact candidate symbol, and
+confidence at or above `TRADINGAGENTS_CRYPTO_AI_EXECUTION_MIN_CONFIDENCE`
+(default `0.62`). The selected candidate is then evaluated by `RiskManager`;
+only both approvals can reach `ExecutionRouter`.
 
 Start the real-time stream first for unattended operation:
 
@@ -42,13 +49,13 @@ python -m cli.main crypto-okx-stream-status --symbols BTC,ETH,SOL,XRP --max-age-
 Service-style loop:
 
 ```powershell
-python -m cli.main crypto-autopilot --symbols BTC,ETH,SOL,XRP --mode paper --execute-top --cycles 0 --interval-seconds 300
+python -m cli.main crypto-autopilot --symbols BTC,ETH,SOL,XRP --mode paper --ai-review --execute-top --cycles 0 --interval-seconds 300
 ```
 
 Paper loop with automatic reduce-only exits for locally tracked positions:
 
 ```powershell
-python -m cli.main crypto-autopilot --symbols BTC,ETH,SOL,XRP --mode paper --execute-top --auto-close --cycles 0 --interval-seconds 300
+python -m cli.main crypto-autopilot --symbols BTC,ETH,SOL,XRP --mode paper --ai-review --execute-top --auto-close --cycles 0 --interval-seconds 300
 ```
 
 OKX guarded demo execution is available after the explicit execution switch,
@@ -62,7 +69,7 @@ $env:TRADINGAGENTS_CRYPTO_OKX_API_SECRET="..."
 $env:TRADINGAGENTS_CRYPTO_OKX_API_PASSPHRASE="..."
 $env:TRADINGAGENTS_CRYPTO_OKX_DEMO_EXECUTION_ENABLED="true"
 python -m cli.main crypto-okx-demo-readiness --symbol BTC
-python -m cli.main crypto-autopilot --symbols BTC,ETH,SOL,XRP --mode testnet --execute-top --auto-close --cycles 12 --interval-seconds 300
+python -m cli.main crypto-autopilot --symbols BTC,ETH,SOL,XRP --mode testnet --ai-review --execute-top --auto-close --cycles 12 --interval-seconds 300
 ```
 
 OKX BUY orders include exchange-side attached mark-price TP/SL protection.
@@ -76,14 +83,14 @@ Hyperliquid testnet execution:
 
 ```powershell
 $env:TRADINGAGENTS_CRYPTO_EXCHANGE_PROVIDER="hyperliquid"
-python -m cli.main crypto-autopilot --symbols BTC,ETH --mode testnet --execute-top --auto-close --cycles 12 --interval-seconds 300
+python -m cli.main crypto-autopilot --symbols BTC,ETH --mode testnet --ai-review --execute-top --auto-close --cycles 12 --interval-seconds 300
 ```
 
 Hyperliquid live execution requires all live guards:
 
 ```powershell
 $env:TRADINGAGENTS_CRYPTO_EXCHANGE_PROVIDER="hyperliquid"
-python -m cli.main crypto-autopilot --symbols BTC,ETH --mode live --execute-top --auto-close --allow-live --live-confirm I_UNDERSTAND_THIS_PLACES_REAL_HYPERLIQUID_ORDERS
+python -m cli.main crypto-autopilot --symbols BTC,ETH --mode live --ai-review --execute-top --auto-close --allow-live --live-confirm I_UNDERSTAND_THIS_PLACES_REAL_HYPERLIQUID_ORDERS
 ```
 
 Live mode still will not submit orders unless:

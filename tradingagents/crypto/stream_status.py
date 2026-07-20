@@ -107,7 +107,11 @@ def summarize_stream_status(
                 counts=counts,
                 latest=latest,
                 now=current,
-                max_age_seconds=max_age_seconds,
+                max_age_seconds=_channel_max_age_seconds(
+                    provider,
+                    channel,
+                    max_age_seconds,
+                ),
             )
         )
     for symbol in selected:
@@ -118,7 +122,11 @@ def summarize_stream_status(
                     counts=counts,
                     latest=latest,
                     now=current,
-                    max_age_seconds=max_age_seconds,
+                    max_age_seconds=_channel_max_age_seconds(
+                        provider,
+                        channel,
+                        max_age_seconds,
+                    ),
                 )
             )
 
@@ -150,6 +158,16 @@ def _symbol_normalizer(provider: str):
     if provider == "hyperliquid":
         return HyperliquidClient.normalize_symbol
     return lambda value: str(value).strip().upper()
+
+
+def _channel_max_age_seconds(
+    provider: str,
+    channel: str,
+    requested_max_age_seconds: int,
+) -> int:
+    if provider == "okx" and channel.startswith("candle"):
+        return max(requested_max_age_seconds, 120)
+    return requested_max_age_seconds
 
 
 def _archive_paths(

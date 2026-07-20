@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import json
+import logging
 import time
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 from threading import Event
@@ -12,6 +13,9 @@ from typing import Any, Callable
 
 from .config import CryptoTradingConfig
 from .okx_client import OKXClient
+
+
+logger = logging.getLogger(__name__)
 
 
 class OKXStreamError(RuntimeError):
@@ -43,6 +47,19 @@ class OKXStreamRunSummary:
     websocket_url: str
     websocket_urls: tuple[str, ...]
     duration_seconds: int
+    reconnects: int = 0
+
+
+@dataclass
+class _OKXSocketConnection:
+    url: str
+    plan: tuple[dict[str, str], ...]
+    request_id: str
+    socket: Any | None = None
+    last_received_monotonic: float = 0.0
+    last_ping_monotonic: float = 0.0
+    subscription_seen_at: dict[tuple[str, str], float] = field(default_factory=dict)
+    consecutive_failures: int = 0
 
 
 class OKXEventArchive:
@@ -67,6 +84,12 @@ class OKXStreamService:
         archive: OKXEventArchive | None = None,
         ws_factory: Callable[[str], Any] | None = None,
         now: Callable[[], datetime] = lambda: datetime.now(UTC),
+        monotonic: Callable[[], float] = time.monotonic,
+        sleep: Callable[[float], None] = time.sleep,
+        ping_interval_seconds: float = 20.0,
+        subscription_stale_seconds: float = 120.0,
+        reconnect_initial_seconds: float = 1.0,
+        reconnect_max_seconds: float = 30.0,
     ):
         self.config = config
         self.client = OKXClient(config)
@@ -79,9 +102,20 @@ class OKXStreamService:
         self.archive = archive or OKXEventArchive(default_okx_stream_archive_path(config.state_dir))
         self.ws_factory = ws_factory or _default_ws_factory
         self.now = now
+        self.monotonic = monotonic
+        self.sleep = sleep
+        self.ping_interval_seconds = max(1.0, ping_interval_seconds)
+        self.subscription_stale_seconds = max(1.0, subscription_stale_seconds)
+        self.reconnect_initial_seconds = max(0.0, reconnect_initial_seconds)
+        self.reconnect_max_seconds = max(
+            self.reconnect_initial_seconds,
+            reconnect_max_seconds,
+        )
         self._stop = Event()
         self._sockets: list[Any] = []
+        self._connections: list[_OKXSocketConnection] = []
         self._subscriptions: tuple[OKXStreamSubscription, ...] = ()
+        self._reconnects = 0
 
     def subscription_plan(self) -> tuple[dict[str, str], ...]:
         args: list[dict[str, str]] = []
@@ -98,78 +132,117 @@ class OKXStreamService:
         return tuple(args)
 
     def start(self) -> tuple[OKXStreamSubscription, ...]:
-        if self._sockets:
+        if self._connections:
             return self._subscriptions
         plan = self.subscription_plan()
         self._stop.clear()
         public_plan = tuple(arg for arg in plan if not arg["channel"].startswith("candle"))
         business_plan = tuple(arg for arg in plan if arg["channel"].startswith("candle"))
         if public_plan:
-            self._sockets.append(
-                self._open_and_subscribe(
+            self._connections.append(
+                _OKXSocketConnection(
                     self.config.resolved_okx_ws_public_url,
                     public_plan,
                     request_id="okxpublic1",
                 )
             )
         if business_plan:
-            self._sockets.append(
-                self._open_and_subscribe(
+            self._connections.append(
+                _OKXSocketConnection(
                     self.config.resolved_okx_ws_business_url,
                     business_plan,
                     request_id="okxbusiness1",
                 )
             )
+        try:
+            for connection in self._connections:
+                self._connect(connection)
+        except Exception as exc:
+            self.stop()
+            if isinstance(exc, OKXStreamError):
+                raise
+            raise OKXStreamError(f"OKX WebSocket start failed: {exc}") from exc
         self._subscriptions = tuple(OKXStreamSubscription(arg=dict(arg)) for arg in plan)
         return self._subscriptions
 
-    def _open_and_subscribe(
-        self,
-        url: str,
-        plan: tuple[dict[str, str], ...],
-        *,
-        request_id: str,
-    ) -> Any:
-        ws = self.ws_factory(url)
-        if hasattr(ws, "settimeout"):
-            ws.settimeout(1.0)
-        ws.send(
-            json.dumps(
-                {
-                    "id": request_id,
-                    "op": "subscribe",
-                    "args": list(plan),
-                },
-                separators=(",", ":"),
+    def _connect(self, connection: _OKXSocketConnection) -> None:
+        ws = self.ws_factory(connection.url)
+        try:
+            if hasattr(ws, "settimeout"):
+                ws.settimeout(1.0)
+            ws.send(
+                json.dumps(
+                    {
+                        "id": connection.request_id,
+                        "op": "subscribe",
+                        "args": list(connection.plan),
+                    },
+                    separators=(",", ":"),
+                )
             )
-        )
-        return ws
+        except Exception:
+            if hasattr(ws, "close"):
+                ws.close()
+            raise
+        current = self.monotonic()
+        connection.socket = ws
+        connection.last_received_monotonic = current
+        connection.last_ping_monotonic = current
+        connection.subscription_seen_at = {
+            _subscription_key(arg): current
+            for arg in connection.plan
+            if _requires_subscription_liveness(arg)
+        }
+        connection.consecutive_failures = 0
+        self._sockets = [
+            item.socket for item in self._connections if item.socket is not None
+        ]
 
     def stop(self) -> None:
         self._stop.set()
-        for ws in self._sockets:
+        for connection in self._connections:
+            ws = connection.socket
             if hasattr(ws, "close"):
-                ws.close()
+                try:
+                    ws.close()
+                except Exception:
+                    pass
+            connection.socket = None
         self._sockets = []
+        self._connections = []
 
     def run(self, *, duration_seconds: int) -> OKXStreamRunSummary:
         self.start()
-        started = time.monotonic()
+        started = self.monotonic()
         try:
             while not self._stop.is_set():
-                if duration_seconds > 0 and time.monotonic() - started >= duration_seconds:
+                if duration_seconds > 0 and self.monotonic() - started >= duration_seconds:
                     break
-                for ws in tuple(self._sockets):
+                for connection in tuple(self._connections):
+                    if self._stop.is_set():
+                        break
+                    ws = connection.socket
+                    if ws is None:
+                        self._reconnect(connection, "socket is not connected")
+                        continue
                     try:
                         raw = ws.recv()
                     except TimeoutError:
+                        self._maintain(connection)
                         continue
                     except Exception as exc:
                         if _is_timeout(exc):
+                            self._maintain(connection)
                             continue
-                        raise OKXStreamError(f"OKX WebSocket receive failed: {exc}") from exc
+                        self._reconnect(connection, str(exc))
+                        continue
                     if raw:
-                        self._on_message(raw)
+                        connection.last_received_monotonic = self.monotonic()
+                        if raw == "pong" or raw == b"pong":
+                            continue
+                        event = self._on_message(raw)
+                        if event is not None:
+                            self._record_subscription_activity(connection, event)
         except KeyboardInterrupt:
             self._stop.set()
         finally:
@@ -184,9 +257,73 @@ class OKXStreamService:
                 self.config.resolved_okx_ws_business_url,
             ),
             duration_seconds=duration_seconds,
+            reconnects=self._reconnects,
         )
 
-    def _on_message(self, raw: str | bytes | dict[str, Any]) -> None:
+    def _maintain(self, connection: _OKXSocketConnection) -> None:
+        current = self.monotonic()
+        stale = any(
+            current - seen_at > self.subscription_stale_seconds
+            for seen_at in connection.subscription_seen_at.values()
+        )
+        if stale:
+            self._reconnect(connection, "one or more subscriptions became stale")
+            return
+        if current - connection.last_received_monotonic < self.ping_interval_seconds:
+            return
+        if current - connection.last_ping_monotonic < self.ping_interval_seconds:
+            return
+        try:
+            assert connection.socket is not None
+            connection.socket.send("ping")
+            connection.last_ping_monotonic = current
+        except Exception as exc:
+            self._reconnect(connection, f"heartbeat failed: {exc}")
+
+    def _reconnect(self, connection: _OKXSocketConnection, reason: str) -> None:
+        ws = connection.socket
+        if hasattr(ws, "close"):
+            try:
+                ws.close()
+            except Exception:
+                pass
+        connection.socket = None
+        self._sockets = [
+            item.socket for item in self._connections if item.socket is not None
+        ]
+        connection.consecutive_failures += 1
+        self._reconnects += 1
+        logger.warning("Reconnecting OKX WebSocket %s: %s", connection.url, reason)
+        delay = min(
+            self.reconnect_initial_seconds
+            * (2 ** max(0, connection.consecutive_failures - 1)),
+            self.reconnect_max_seconds,
+        )
+        if delay and not self._stop.is_set():
+            self.sleep(delay)
+        if self._stop.is_set():
+            return
+        try:
+            self._connect(connection)
+        except Exception as exc:
+            connection.socket = None
+            logger.warning("OKX WebSocket reconnect failed for %s: %s", connection.url, exc)
+
+    def _record_subscription_activity(
+        self,
+        connection: _OKXSocketConnection,
+        event: OKXStreamEvent,
+    ) -> None:
+        current = connection.last_received_monotonic
+        for symbol in event.symbols:
+            key = (event.channel, self.client.instrument_id(symbol))
+            if key in connection.subscription_seen_at:
+                connection.subscription_seen_at[key] = current
+
+    def _on_message(
+        self,
+        raw: str | bytes | dict[str, Any],
+    ) -> OKXStreamEvent | None:
         if isinstance(raw, bytes):
             raw = raw.decode("utf-8")
         if isinstance(raw, str):
@@ -197,14 +334,14 @@ class OKXStreamService:
         else:
             message = raw
         if not isinstance(message, dict):
-            return
+            return None
         if message.get("event") == "error":
             raise OKXStreamError(f"OKX WebSocket error: {message}")
         if "data" not in message:
-            return
-        self.archive.write(
-            okx_stream_event_from_message(message, received_at=self.now().isoformat())
-        )
+            return None
+        event = okx_stream_event_from_message(message, received_at=self.now().isoformat())
+        self.archive.write(event)
+        return event
 
 
 def default_okx_stream_archive_path(state_dir: Path, now: datetime | None = None) -> Path:
@@ -331,6 +468,14 @@ def _candle_summary(channel: str, row: Any) -> dict[str, Any]:
 def _is_timeout(exc: Exception) -> bool:
     name = exc.__class__.__name__.lower()
     return "timeout" in name or "timed out" in str(exc).lower()
+
+
+def _subscription_key(arg: dict[str, str]) -> tuple[str, str]:
+    return str(arg.get("channel", "")), str(arg.get("instId", ""))
+
+
+def _requires_subscription_liveness(arg: dict[str, str]) -> bool:
+    return arg.get("channel") != "trades"
 
 
 def _safe_float(value: Any) -> float:

@@ -11,7 +11,7 @@ from .base_contract import TRADINGAGENTS_ROLE_CHAIN
 from .config import CryptoTradingConfig
 from .engine import CryptoTradingEngine, ReviewedSignal
 from .llm_router import CryptoLLMRouterNotReady, create_crypto_review_llm
-from .models import AITradeReview, ExecutionMode
+from .models import AITradeReview, ExecutionMode, OpportunitySignal
 
 
 @dataclass(frozen=True)
@@ -27,6 +27,8 @@ class CryptoWorkflowReport:
     role_reports: tuple[CryptoRoleReport, ...]
     execution_mode: ExecutionMode
     ai_error: str = ""
+    execution_requested: bool = False
+    execution_gate_reason: str = ""
 
     @property
     def approved(self) -> tuple[ReviewedSignal, ...]:
@@ -48,6 +50,7 @@ class CryptoWorkflowReport:
                     "## AI Review",
                     (
                         f"Action: {self.ai_review.action} | "
+                        f"Symbol: {self.ai_review.symbol or '-'} | "
                         f"Confidence: {self.ai_review.confidence:.2f} | "
                         f"Router: {self.ai_review.router} | "
                         f"Model: {self.ai_review.model or '-'}"
@@ -60,6 +63,13 @@ class CryptoWorkflowReport:
             )
         elif self.ai_error:
             parts.extend(["## AI Review", f"Skipped: {self.ai_error}", ""])
+        if self.execution_requested:
+            gate = (
+                f"BLOCKED - {self.execution_gate_reason}"
+                if self.execution_gate_reason
+                else "PASSED"
+            )
+            parts.extend(["## Execution Gate", gate, ""])
 
         for report in self.role_reports:
             parts.extend([f"## {report.role}", report.content, ""])
@@ -67,7 +77,7 @@ class CryptoWorkflowReport:
 
 
 class CryptoTradingAgentsWorkflow:
-    """Run scan/risk/AI review and render it as a TradingAgents role hand-off."""
+    """Run scanner, AI review, deterministic risk, then optional execution."""
 
     def __init__(
         self,
@@ -86,26 +96,57 @@ class CryptoTradingAgentsWorkflow:
         ai_review_enabled: bool = False,
     ) -> CryptoWorkflowReport:
         mode = execution_mode or self.config.execution_mode
+        candidates = tuple(self.engine.scan_candidates(symbols))
+        ai_review, ai_error = self._optional_ai_review(candidates, ai_review_enabled)
+
+        pre_risk_gate_reason = ""
+        if execute_top:
+            if not ai_review_enabled:
+                pre_risk_gate_reason = (
+                    "Execution blocked: --execute-top requires --ai-review."
+                )
+            elif ai_error:
+                pre_risk_gate_reason = (
+                    "Execution blocked because AI review failed: " + ai_error
+                )
+            else:
+                pre_risk_gate_reason = self.engine.ai_execution_block_reason(ai_review)
+
         reviewed = tuple(
-            self.engine.scan_and_review(
-                symbols=symbols,
-                execute_top=execute_top,
+            self.engine.review_candidates(
+                candidates,
+                for_execution=execute_top and not pre_risk_gate_reason,
+                execution_mode=mode,
+            )
+        )
+        execution_gate_reason = pre_risk_gate_reason
+        if execute_top and not execution_gate_reason:
+            executed, execution_gate_reason = self.engine.execute_ai_approved(
+                reviewed,
+                ai_review,
                 execution_mode=mode,
                 live_confirmation=live_confirmation,
             )
-        )
-        ai_review, ai_error = self._optional_ai_review(reviewed, ai_review_enabled)
+            reviewed = tuple(executed)
         return CryptoWorkflowReport(
             reviewed=reviewed,
             ai_review=ai_review,
-            role_reports=tuple(self._build_role_reports(reviewed, ai_review)),
+            role_reports=tuple(
+                self._build_role_reports(
+                    reviewed,
+                    ai_review,
+                    execution_gate_reason,
+                )
+            ),
             execution_mode=mode,
             ai_error=ai_error,
+            execution_requested=execute_top,
+            execution_gate_reason=execution_gate_reason,
         )
 
     def _optional_ai_review(
         self,
-        reviewed: tuple[ReviewedSignal, ...],
+        candidates: tuple[OpportunitySignal, ...],
         enabled: bool,
     ) -> tuple[AITradeReview | None, str]:
         if not enabled:
@@ -121,7 +162,7 @@ class CryptoTradingAgentsWorkflow:
                 llm,
                 router=self.config.ai_router,
                 model=model_name,
-            ).review_structured(list(reviewed))
+            ).review_structured(list(candidates))
             return review, ""
         except CryptoLLMRouterNotReady as exc:
             return None, str(exc)
@@ -132,6 +173,7 @@ class CryptoTradingAgentsWorkflow:
         self,
         reviewed: tuple[ReviewedSignal, ...],
         ai_review: AITradeReview | None,
+        execution_gate_reason: str,
     ) -> Iterable[CryptoRoleReport]:
         approved = tuple(item for item in reviewed if item.risk.approved)
         rejected = tuple(item for item in reviewed if not item.risk.approved)
@@ -145,7 +187,11 @@ class CryptoTradingAgentsWorkflow:
             "Research Manager": lambda: self._manager_report(approved, rejected),
             "Trader": lambda: self._trader_report(best),
             "Risk Analysts": lambda: self._risk_report(reviewed),
-            "Portfolio Manager": lambda: self._portfolio_report(approved, ai_review),
+            "Portfolio Manager": lambda: self._portfolio_report(
+                approved,
+                ai_review,
+                execution_gate_reason,
+            ),
         }
         for role in CRYPTO_AGENT_ROLES:
             builder = builders.get(role.name)
@@ -154,7 +200,7 @@ class CryptoTradingAgentsWorkflow:
 
     def _market_report(self, reviewed: tuple[ReviewedSignal, ...]) -> str:
         if not reviewed:
-            return "No Hyperliquid candidates were produced by the scanner."
+            return "No candidates were produced by the configured exchange scanner."
         lines = [
             "Top scanner candidates:",
             *(_candidate_line(item) for item in reviewed[:5]),
@@ -173,7 +219,7 @@ class CryptoTradingAgentsWorkflow:
         if not hot:
             return (
                 "No Lana/hotlist candidate dominated this scan. Treat social "
-                "attention as unknown until X, Hyperliquid ecosystem, or forum text is ingested."
+                "attention as unknown until an external sentiment source is ingested."
             )
         return "\n".join(
             ["Attention-linked candidates:", *(_candidate_line(item) for item in hot[:5])]
@@ -187,7 +233,7 @@ class CryptoTradingAgentsWorkflow:
         if approved:
             return "\n".join(
                 [
-                    "Strongest long-only Hyperliquid case:",
+                    "Strongest long-only case:",
                     _candidate_line(approved[0]),
                     _reasons(approved[0]),
                 ]
@@ -261,7 +307,7 @@ class CryptoTradingAgentsWorkflow:
                 detail = "; ".join(item.risk.rejected_rules)
             lines.append(f"- {item.signal.symbol}: {status} - {detail}")
         lines.append(
-            "Live Hyperliquid orders require SDK execution enabled, protective orders, live mode, and explicit confirmation."
+            "Exchange orders require venue-specific execution switches, protective orders, the selected mode, and explicit confirmation."
         )
         return "\n".join(lines)
 
@@ -269,7 +315,10 @@ class CryptoTradingAgentsWorkflow:
         self,
         approved: tuple[ReviewedSignal, ...],
         ai_review: AITradeReview | None,
+        execution_gate_reason: str,
     ) -> str:
+        if execution_gate_reason:
+            return f"Final decision: HOLD. {execution_gate_reason}"
         if not approved:
             return (
                 "Final decision: no trade. Capital preservation wins when the hard "
