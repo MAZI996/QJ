@@ -19,7 +19,15 @@ python -m cli.main crypto-live-readiness --target live --mainnet --wallet-addres
 The live target fails unless the local gates are aligned: Hyperliquid mainnet,
 SDK execution enabled, live switch enabled, API wallet configured, leverage at
 1, protective orders enabled, emergency stop configured, circuit breaker clear,
-paper-order evidence present, and the position guardian enabled.
+paper-order evidence present, fresh WebSocket stream evidence present, and the
+position guardian enabled.
+
+Fresh stream evidence comes from the local Hyperliquid WebSocket archive:
+
+```powershell
+python -m cli.main crypto-hyperliquid-stream --mainnet --symbols BTC,ETH,SOL,HYPE --seconds 0
+python -m cli.main crypto-hyperliquid-stream-status --symbols BTC,ETH,SOL,HYPE --max-age-seconds 600
+```
 
 ## 2. Position Management
 

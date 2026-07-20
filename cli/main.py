@@ -2675,6 +2675,72 @@ def crypto_hyperliquid_stream(
     )
 
 
+@app.command("crypto-hyperliquid-stream-status")
+def crypto_hyperliquid_stream_status(
+    symbols: str = typer.Option(
+        "BTC,ETH,SOL,HYPE",
+        "--symbols",
+        help="Comma-separated Hyperliquid coins to check in the archive.",
+    ),
+    max_age_seconds: int = typer.Option(
+        600,
+        "--max-age-seconds",
+        help="Maximum accepted age for each required WebSocket channel.",
+    ),
+    archive_path: Optional[Path] = typer.Option(
+        None,
+        "--archive-path",
+        help="Optional JSONL archive path. Defaults to TRADINGAGENTS_CRYPTO_STATE_DIR/events.",
+    ),
+):
+    """Show freshness of archived Hyperliquid WebSocket events."""
+
+    from tradingagents.crypto import CryptoTradingConfig, summarize_stream_status
+
+    selected = tuple(item.strip().upper() for item in symbols.split(",") if item.strip())
+    config = CryptoTradingConfig.from_env()
+    summary = summarize_stream_status(
+        config,
+        symbols=selected,
+        archive_path=archive_path,
+        max_age_seconds=max_age_seconds,
+    )
+    color = "green" if summary.fresh else "yellow"
+    console.print(
+        Panel(
+            (
+                f"fresh={summary.fresh} | events_read={summary.events_read} | "
+                f"max_age_seconds={summary.max_age_seconds} | "
+                f"archives={len(summary.archive_paths)}"
+            ),
+            title="Hyperliquid Stream Freshness",
+            border_style=color,
+        )
+    )
+    table = Table(title="Required Stream Channels", box=box.SIMPLE_HEAVY)
+    table.add_column("Symbol", style="bold")
+    table.add_column("Channel")
+    table.add_column("Fresh")
+    table.add_column("Count", justify="right")
+    table.add_column("Age Sec", justify="right")
+    table.add_column("Last Received")
+    table.add_column("Message")
+    for row in summary.rows:
+        fresh_style = "green" if row.fresh else "yellow"
+        table.add_row(
+            row.symbol,
+            row.channel,
+            f"[{fresh_style}]{'yes' if row.fresh else 'no'}[/{fresh_style}]",
+            str(row.count),
+            f"{row.age_seconds:.1f}" if row.age_seconds is not None else "-",
+            row.last_received_at or "-",
+            row.message,
+        )
+    console.print(table)
+    if summary.archive_paths:
+        console.print("[dim]Archives:[/dim] " + ", ".join(str(path) for path in summary.archive_paths))
+
+
 @app.command("crypto-regime")
 def crypto_regime(
     symbols: str = typer.Option(

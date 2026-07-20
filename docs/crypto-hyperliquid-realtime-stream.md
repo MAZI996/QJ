@@ -44,6 +44,27 @@ Run this on the trading VPS when building live paper evidence. Use a process
 manager such as systemd, Docker, or Windows Task Scheduler so it restarts after
 machine reboots.
 
+## Freshness Status
+
+The status command is read-only. It checks the local JSONL archive and confirms
+that each required stream has recent events:
+
+```powershell
+python -m cli.main crypto-hyperliquid-stream-status --symbols BTC,ETH,SOL,HYPE --max-age-seconds 600
+```
+
+Required public evidence:
+
+- global `allMids`
+- per-symbol `l2Book`
+- per-symbol `trades`
+- per-symbol `candle`
+- per-symbol `activeAssetCtx`
+
+`crypto-live-readiness --target live` now includes this evidence as a live gate.
+Paper and testnet readiness warn when the stream evidence is missing or stale;
+live readiness fails until fresh stream events are present.
+
 ## Account Events
 
 Account events are disabled by default. Enable them only on the trading machine
@@ -70,7 +91,7 @@ still handled by the separate SDK execution adapter and live-readiness gates.
 
 The stream archive should next feed:
 
-- scanner data freshness checks
-- paper-mode evidence windows
+- scanner/autopilot market inputs
+- paper-mode evidence windows and uptime summaries
 - position recovery comparisons
 - L2/order-book replay for hftbacktest-inspired validation

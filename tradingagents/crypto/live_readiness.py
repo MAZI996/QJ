@@ -11,6 +11,7 @@ from .config import CryptoTradingConfig
 from .hyperliquid_diagnostics import HyperliquidDiagnostics
 from .hyperliquid_execution import HyperliquidExecutionAdapter
 from .positions import PositionStore
+from .stream_status import summarize_stream_status
 
 
 ReadinessTarget = Literal["paper", "testnet", "live"]
@@ -63,6 +64,7 @@ class LiveReadinessChecker:
             self._circuit_breaker_check(),
             self._position_state_check(target),
             self._paper_evidence_check(target),
+            self._stream_evidence_check(target),
         ]
         if network:
             checks.extend(self._network_checks(symbol))
@@ -313,6 +315,32 @@ class LiveReadinessChecker:
             "paper_evidence",
             status,
             "No paper order journal found; run paper autopilot before live.",
+        )
+
+    def _stream_evidence_check(self, target: ReadinessTarget) -> ReadinessCheck:
+        summary = summarize_stream_status(self.config)
+        if summary.fresh:
+            return ReadinessCheck(
+                "realtime_stream_evidence",
+                "PASS",
+                (
+                    f"Fresh Hyperliquid WebSocket archive found: events={summary.events_read}, "
+                    f"latest={summary.latest_event_at or '-'}"
+                ),
+            )
+        missing = ", ".join(
+            f"{row.symbol}:{row.channel}" for row in summary.missing_or_stale[:5]
+        )
+        suffix = f"; first missing/stale={missing}" if missing else ""
+        status = "FAIL" if target == "live" else "WARN"
+        return ReadinessCheck(
+            "realtime_stream_evidence",
+            status,
+            (
+                "No fresh Hyperliquid WebSocket evidence found; run "
+                "crypto-hyperliquid-stream before live automation"
+                f"{suffix}."
+            ),
         )
 
     def _network_checks(self, symbol: str) -> list[ReadinessCheck]:
