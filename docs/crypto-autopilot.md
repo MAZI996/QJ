@@ -45,7 +45,7 @@ watchdog into Hermes and schedule it without an agent:
 
 ```bash
 install -m 700 scripts/hermes/okx_analysis_watchdog.sh \
-  /opt/data/.hermes/scripts/okx_analysis_watchdog.sh
+  /opt/data/scripts/okx_analysis_watchdog.sh
 hermes cron create "every 5m" \
   --name "QJ OKX analysis-only" \
   --deliver local \
@@ -59,6 +59,10 @@ the demo execution switch off, enforces the 1x leverage policy, prevents
 overlapping cycles, and restarts the public OKX stream when it is absent.
 Successful ticks are silent; reports and logs are written beneath
 `TRADINGAGENTS_CRYPTO_STATE_DIR`.
+
+Hostinger's current Hermes image resolves cron script names beneath
+`/opt/data/scripts`, even though some CLI help text describes the directory as
+`~/.hermes/scripts`.
 
 Start the real-time stream first for unattended operation:
 
