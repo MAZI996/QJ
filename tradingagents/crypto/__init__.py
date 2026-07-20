@@ -7,6 +7,13 @@ path is enabled.
 
 from .config import CryptoTradingConfig
 from .autopilot import AutoPilotCycleResult, CryptoAutoPilot, CryptoAutoPilotSafetyError
+from .adoption import (
+    GITHUB_ADOPTION_SOURCES,
+    SourceAdoption,
+    adoption_by_key,
+    adoption_keys,
+    adoption_sources,
+)
 from .attention_harvester import AttentionHarvester, AttentionHarvestResult
 from .backtest import (
     BacktestCandidateDecision,
@@ -124,6 +131,7 @@ __all__ = [
     "CryptoWorkflowReport",
     "DecisionJournalWrite",
     "AutoPilotCycleResult",
+    "GITHUB_ADOPTION_SOURCES",
     "AttentionHarvester",
     "AttentionHarvestResult",
     "BacktestCandidateDecision",
@@ -199,7 +207,11 @@ __all__ = [
     "RuntimeChampionApplication",
     "SeasonRegime",
     "SeasonScore",
+    "SourceAdoption",
     "StrategyFusionEngine",
+    "adoption_by_key",
+    "adoption_keys",
+    "adoption_sources",
     "build_paper_queue_plan",
     "evolution_html_output_path",
     "evolution_archive_sections",

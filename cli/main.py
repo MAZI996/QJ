@@ -5080,6 +5080,45 @@ def crypto_hyperliquid_account(
     console.print(table)
 
 
+@app.command("crypto-github-absorption")
+def crypto_github_absorption(
+    json_output: Optional[Path] = typer.Option(
+        None,
+        "--json-output",
+        help="Optional path to write the full seven-source adoption map as JSON.",
+    ),
+):
+    """Show the GitHub projects absorbed into the crypto roadmap."""
+
+    from tradingagents.crypto import adoption_sources
+
+    sources = adoption_sources()
+    table = Table(title="Crypto GitHub Absorption Map", box=box.SIMPLE_HEAVY)
+    table.add_column("Source", style="bold")
+    table.add_column("Status")
+    table.add_column("Adoption Target")
+    table.add_column("Next Step")
+    table.add_column("Guardrail")
+    for source in sources:
+        table.add_row(
+            source.name,
+            source.status,
+            source.adoption_target,
+            source.next_step,
+            source.guardrail,
+        )
+    console.print(table)
+
+    if json_output:
+        payload = {
+            "source_count": len(sources),
+            "sources": [source.to_dict() for source in sources],
+        }
+        json_output.parent.mkdir(parents=True, exist_ok=True)
+        json_output.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        console.print(f"[green]Adoption map JSON:[/green] {json_output}")
+
+
 @app.command("crypto-base")
 def crypto_base():
     """Show the TradingAgents base-layer contract for this crypto extension."""
