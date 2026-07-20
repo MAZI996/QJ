@@ -3,6 +3,10 @@
 from __future__ import annotations
 
 import json
+import os
+import re
+import shutil
+import subprocess
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
@@ -47,6 +51,9 @@ def create_crypto_review_llm(config: CryptoTradingConfig):
                 "Hermes router is selected, but TRADINGAGENTS_CRYPTO_AI_MODEL is empty."
             )
         return HermesReviewLLM(config)
+
+    if router in {"hermes_cli", "hermes-cli"}:
+        return HermesCLIReviewLLM(config)
 
     raise CryptoLLMRouterNotReady(f"Unsupported crypto AI router: {config.ai_router}")
 
@@ -169,9 +176,105 @@ class HermesReviewLLM:
         return json.dumps(payload, ensure_ascii=False)
 
 
+class HermesCLIReviewLLM:
+    """Invoke the local Hermes CLI in single-query, tool-disabled mode."""
+
+    def __init__(self, config: CryptoTradingConfig):
+        self.config = config
+        self.model = config.ai_model
+
+    def invoke(self, prompt: str):
+        command = self.config.hermes_cli_command.strip() or "hermes"
+        if shutil.which(command) is None:
+            raise CryptoLLMRouterNotReady(
+                f"Hermes CLI executable was not found: {command}"
+            )
+        args = [
+            command,
+            "chat",
+            "-Q",
+            "--max-turns",
+            "1",
+            "--toolsets",
+            "",
+            "--source",
+            "tradingagents",
+        ]
+        if self.config.ai_model:
+            args.extend(("--model", self.config.ai_model))
+        args.extend(("--query", prompt))
+        env = dict(os.environ)
+        env.update({"NO_COLOR": "1", "TERM": "dumb"})
+        try:
+            completed = subprocess.run(
+                args,
+                capture_output=True,
+                text=True,
+                timeout=self.config.hermes_cli_timeout_seconds,
+                check=False,
+                env=env,
+            )
+        except subprocess.TimeoutExpired as exc:
+            raise CryptoLLMRouterNotReady(
+                "Hermes CLI timed out after "
+                f"{self.config.hermes_cli_timeout_seconds} seconds."
+            ) from exc
+        except OSError as exc:
+            raise CryptoLLMRouterNotReady(
+                f"Hermes CLI failed to start: {exc}"
+            ) from exc
+
+        if completed.returncode != 0:
+            detail = _compact_cli_error(completed.stderr or completed.stdout)
+            raise CryptoLLMRouterNotReady(
+                f"Hermes CLI exited with code {completed.returncode}: {detail}"
+            )
+        content = _clean_hermes_cli_output(completed.stdout)
+        if not content:
+            raise CryptoLLMRouterNotReady("Hermes CLI returned an empty response.")
+        return _LLMResponse(content=content)
+
+    def healthcheck(self) -> HermesRouterStatus:
+        command = self.config.hermes_cli_command.strip() or "hermes"
+        resolved = shutil.which(command)
+        if resolved is None:
+            return HermesRouterStatus(
+                False,
+                "hermes_cli",
+                self.config.ai_model,
+                command,
+                f"Hermes CLI executable was not found: {command}",
+            )
+        return HermesRouterStatus(
+            True,
+            "hermes_cli",
+            self.config.ai_model,
+            resolved,
+            "Hermes CLI is available for single-query review.",
+        )
+
+
 class _LLMResponse:
     def __init__(self, content: str):
         self.content = content
+
+
+_ANSI_ESCAPE = re.compile(r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
+
+
+def _clean_hermes_cli_output(value: str) -> str:
+    clean = _ANSI_ESCAPE.sub("", value).replace("\r", "")
+    lines = [
+        line.strip()
+        for line in clean.splitlines()
+        if line.strip() and not line.strip().lower().startswith("session_id:")
+    ]
+    return "\n".join(lines).strip()
+
+
+def _compact_cli_error(value: str) -> str:
+    clean = _clean_hermes_cli_output(value)
+    return clean[:500] or "no error output"
 
 
 def _models_from_payload(payload: dict[str, Any]) -> set[str]:

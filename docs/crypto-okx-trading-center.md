@@ -34,6 +34,21 @@ $env:TRADINGAGENTS_CRYPTO_OKX_API_PASSPHRASE = "..."
 
 Do not paste secrets into chat or commit them to the repository.
 
+On a Hostinger Hermes Agent container, use the installed CLI route when the
+dashboard does not expose an OpenAI-compatible `/v1` API:
+
+```powershell
+$env:TRADINGAGENTS_CRYPTO_AI_ROUTER = "hermes_cli"
+$env:TRADINGAGENTS_CRYPTO_HERMES_CLI_COMMAND = "hermes"
+$env:TRADINGAGENTS_CRYPTO_HERMES_CLI_TIMEOUT_SECONDS = "90"
+python -m cli.main crypto-hermes-check
+```
+
+`hermes_cli` invokes `hermes chat` in quiet, single-query mode with an empty
+toolset and one maximum turn. It uses the model already selected in Hermes when
+`TRADINGAGENTS_CRYPTO_AI_MODEL` is empty. HTTP deployments can continue using
+`TRADINGAGENTS_CRYPTO_AI_ROUTER=hermes` plus `HERMES_BASE_URL`.
+
 Create a demo-only key with trading permission and without withdrawal
 permission. Configure the OKX account in net position mode and set the selected
 USDT perpetual contract leverage to 1 before enabling execution.

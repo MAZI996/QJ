@@ -2254,15 +2254,21 @@ def crypto_hermes_check():
     """Check whether the configured Hermes model router is reachable."""
 
     from tradingagents.crypto import CryptoTradingConfig
-    from tradingagents.crypto.llm_router import CryptoLLMRouterNotReady, HermesReviewLLM
+    from tradingagents.crypto.llm_router import (
+        CryptoLLMRouterNotReady,
+        HermesCLIReviewLLM,
+        HermesReviewLLM,
+    )
 
     config = CryptoTradingConfig.from_env()
-    if config.ai_router.strip().lower() != "hermes":
+    router = config.ai_router.strip().lower()
+    if router not in {"hermes", "hermes_cli", "hermes-cli"}:
         console.print(
             Panel(
                 (
                     f"router={config.ai_router}; set "
-                    "TRADINGAGENTS_CRYPTO_AI_ROUTER=hermes to check Hermes."
+                    "TRADINGAGENTS_CRYPTO_AI_ROUTER=hermes or hermes_cli "
+                    "to check Hermes."
                 ),
                 title="Hermes Router",
                 border_style="yellow",
@@ -2270,7 +2276,10 @@ def crypto_hermes_check():
         )
         return
     try:
-        status = HermesReviewLLM(config).healthcheck()
+        if router == "hermes":
+            status = HermesReviewLLM(config).healthcheck()
+        else:
+            status = HermesCLIReviewLLM(config).healthcheck()
     except CryptoLLMRouterNotReady as exc:
         console.print(f"[red]{exc}[/red]")
         return
