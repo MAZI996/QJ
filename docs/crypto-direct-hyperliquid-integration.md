@@ -64,7 +64,7 @@ Never paste private keys into chat or docs.
 ## Paper Loop
 
 ```powershell
-.\.venv\Scripts\python.exe -m cli.main crypto-autopilot --symbols BTC,ETH,SOL,HYPE --mode paper --execute-top --auto-close --cycles 0 --interval-seconds 300
+.\.venv\Scripts\python.exe -m cli.main crypto-autopilot --symbols BTC,ETH,SOL,HYPE --mode paper --ai-review --execute-top --auto-close --cycles 0 --interval-seconds 300
 ```
 
 ## Testnet And Live Boundary

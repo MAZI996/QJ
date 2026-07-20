@@ -50,7 +50,7 @@ python -m cli.main crypto-backtest --mainnet --symbols BTC,ETH,SOL,HYPE --interv
 python -m cli.main crypto-backtest-sweep --mainnet --symbols BTC,ETH,SOL,HYPE --intervals 5m,15m,1h --lookbacks 60,120 --max-holding-bars 16,32,48 --bars 500
 python -m cli.main crypto-backtest-sweep --mainnet --symbols BTC,ETH,SOL,HYPE --intervals 5m,15m,1h --lookbacks 60,120 --max-holding-bars 16,32,48 --bars 800 --min-trades 5 --min-win-rate 0.40 --min-return-pct 0 --max-drawdown-pct 5 --max-consecutive-losses 3 --candidates-only
 python -m cli.main crypto-paper-queue --mainnet --symbols BTC,ETH,SOL,HYPE --intervals 5m,15m,1h --lookbacks 60,120 --max-holding-bars 16,32,48 --bars 800 --min-trades 5 --min-win-rate 0.40 --min-return-pct 0 --max-drawdown-pct 5 --max-consecutive-losses 3
-python -m cli.main crypto-autopilot --symbols BTC,ETH,SOL,HYPE --mode paper --execute-top --auto-close --cycles 0 --interval-seconds 300
+python -m cli.main crypto-autopilot --symbols BTC,ETH,SOL,HYPE --mode paper --ai-review --execute-top --auto-close --cycles 0 --interval-seconds 300
 ```
 
 The scan path now includes the Hyperliquid market-quality gate by default:
@@ -88,7 +88,7 @@ $env:TRADINGAGENTS_CRYPTO_HYPERLIQUID_SDK_EXECUTION_ENABLED="true"
 Testnet execution still requires `--execute-top`:
 
 ```powershell
-python -m cli.main crypto-scan --symbols BTC --mode testnet --execute-top
+python -m cli.main crypto-scan --symbols BTC --mode testnet --ai-review --execute-top
 ```
 
 Live execution requires all of these at the same time:

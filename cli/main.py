@@ -1281,7 +1281,7 @@ def crypto_scan(
     execute_top: bool = typer.Option(
         False,
         "--execute-top",
-        help="Execute only the top risk-approved signal in the selected mode.",
+        help="Execute the AI-selected, risk-approved signal in the selected mode.",
     ),
     live_confirm: str = typer.Option(
         "",
@@ -1291,7 +1291,7 @@ def crypto_scan(
     ai_review: bool = typer.Option(
         False,
         "--ai-review",
-        help="Ask the configured LLM to review the top scanned opportunities without executing orders.",
+        help="Ask the configured LLM/Hermes route to review candidates before risk and execution.",
     ),
     lana: bool = typer.Option(
         True,
@@ -1338,11 +1338,13 @@ def crypto_scan(
 
     from dataclasses import replace
 
-    from tradingagents.crypto import CryptoTradingConfig, CryptoTradingEngine
+    from tradingagents.crypto import CryptoTradingAgentsWorkflow, CryptoTradingConfig
 
     valid_modes = {"analysis", "paper", "testnet", "live"}
     if mode not in valid_modes:
         raise typer.BadParameter(f"mode must be one of: {', '.join(sorted(valid_modes))}")
+    if execute_top and not ai_review:
+        raise typer.BadParameter("--execute-top requires --ai-review.")
 
     config = CryptoTradingConfig.from_env()
     if interval:
@@ -1380,7 +1382,6 @@ def crypto_scan(
         symbols=selected_symbols,
     )
 
-    engine = CryptoTradingEngine(config)
     console.print(
         Panel(
             (
@@ -1394,12 +1395,14 @@ def crypto_scan(
     if champion_application is not None:
         console.print(_champion_loaded_message(champion_application))
 
-    rows = engine.scan_and_review(
-        selected_symbols,
+    report = CryptoTradingAgentsWorkflow(config=config).run(
+        symbols=selected_symbols,
         execute_top=execute_top,
         execution_mode=mode,  # type: ignore[arg-type]
         live_confirmation=live_confirm,
+        ai_review_enabled=ai_review,
     )
+    rows = report.reviewed
 
     table = Table(title="机会扫描与风控结果", box=box.SIMPLE_HEAVY)
     table.add_column("交易对", style="bold")
@@ -1440,28 +1443,19 @@ def crypto_scan(
                 console.print(f"  - {rule}")
 
     if ai_review:
-        from tradingagents.crypto.advisor import CryptoAIAdvisor
-        from tradingagents.crypto.llm_router import (
-            CryptoLLMRouterNotReady,
-            create_crypto_review_llm,
-        )
-
         console.print("\n[bold cyan]AI 评审[/bold cyan]")
-        try:
-            llm = create_crypto_review_llm(config)
-            model_name = config.ai_model or getattr(llm, "model_name", getattr(llm, "model", ""))
-            review = CryptoAIAdvisor(
-                llm,
-                router=config.ai_router,
-                model=model_name,
-            ).review_structured(rows)
+        if report.ai_review:
+            review = report.ai_review
             console.print(Markdown(review.raw_response))
             console.print(
                 f"[dim]AI router={review.router} model={review.model or '-'} "
-                f"action={review.action} confidence={review.confidence:.2f}[/dim]"
+                f"action={review.action} symbol={review.symbol or '-'} "
+                f"confidence={review.confidence:.2f}[/dim]"
             )
-        except CryptoLLMRouterNotReady as exc:
-            console.print(f"[yellow]{exc}[/yellow]")
+        elif report.ai_error:
+            console.print(f"[yellow]{report.ai_error}[/yellow]")
+    if report.execution_gate_reason:
+        console.print(f"[yellow]{report.execution_gate_reason}[/yellow]")
 
 
 @app.command("crypto-workflow")
@@ -1489,7 +1483,7 @@ def crypto_workflow(
     execute_top: bool = typer.Option(
         False,
         "--execute-top",
-        help="Execute only the top risk-approved signal in the selected mode.",
+        help="Execute the AI-selected, risk-approved signal in the selected mode.",
     ),
     live_confirm: str = typer.Option(
         "",
@@ -1560,6 +1554,8 @@ def crypto_workflow(
     valid_modes = {"analysis", "paper", "testnet", "live"}
     if mode not in valid_modes:
         raise typer.BadParameter(f"mode must be one of: {', '.join(sorted(valid_modes))}")
+    if execute_top and not ai_review:
+        raise typer.BadParameter("--execute-top requires --ai-review.")
 
     config = CryptoTradingConfig.from_env()
     if interval:
@@ -1757,7 +1753,7 @@ def crypto_autopilot(
     execute_top: bool = typer.Option(
         False,
         "--execute-top",
-        help="Execute only the top risk-approved signal each cycle.",
+        help="Execute the AI-selected, risk-approved signal each cycle.",
     ),
     guard_positions: bool = typer.Option(
         True,
@@ -1848,6 +1844,8 @@ def crypto_autopilot(
     valid_modes = {"analysis", "paper", "testnet", "live"}
     if mode not in valid_modes:
         raise typer.BadParameter(f"mode must be one of: {', '.join(sorted(valid_modes))}")
+    if execute_top and not ai_review:
+        raise typer.BadParameter("--execute-top requires --ai-review.")
     if interval_seconds < 1:
         raise typer.BadParameter("interval-seconds must be at least 1.")
     if cycles < 0:
@@ -2980,7 +2978,7 @@ def crypto_okx_stream(
         Panel(
             (
                 f"subscriptions={summary.subscriptions} | events={summary.events} | "
-                f"archive={summary.archive_path}"
+                f"reconnects={summary.reconnects} | archive={summary.archive_path}"
             ),
             title="OKX Stream Archive Summary",
             border_style="green",

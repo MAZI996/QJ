@@ -81,6 +81,90 @@ def test_okx_stream_writes_market_events_to_archive(tmp_path):
     assert fake_ws.closed is True
 
 
+def test_okx_stream_start_is_idempotent_without_duplicate_subscriptions(tmp_path):
+    fake_ws = _FakeWebSocket()
+    config = replace(CryptoTradingConfig(), state_dir=tmp_path)
+    service = OKXStreamService(
+        config,
+        symbols=("BTC",),
+        ws_factory=lambda _url: fake_ws,
+    )
+
+    first = service.start()
+    second = service.start()
+    service.stop()
+
+    assert first == second
+    assert len(fake_ws.sent) == 2
+
+
+def test_okx_stream_reconnects_failed_socket_and_resubscribes(tmp_path):
+    archive = OKXEventArchive(tmp_path / "stream.jsonl")
+    broken = _ScriptedWebSocket([ConnectionError("connection lost")])
+    recovered = _ScriptedWebSocket(
+        [json.dumps(_okx_messages()[0]), KeyboardInterrupt()]
+    )
+    business = _ScriptedWebSocket([TimeoutError()] * 4)
+    public_sockets = iter((broken, recovered))
+
+    def factory(url):
+        if "business" in url:
+            return business
+        return next(public_sockets)
+
+    config = replace(CryptoTradingConfig(), state_dir=tmp_path)
+    service = OKXStreamService(
+        config,
+        symbols=("BTC",),
+        archive=archive,
+        ws_factory=factory,
+        sleep=lambda _seconds: None,
+    )
+
+    summary = service.run(duration_seconds=0)
+
+    assert summary.reconnects == 1
+    assert summary.events == 1
+    assert broken.closed is True
+    assert len(recovered.sent) == 1
+    assert json.loads(recovered.sent[0])["op"] == "subscribe"
+
+
+def test_okx_stream_reconnects_when_one_subscription_stays_stale(tmp_path):
+    clock = [0.0]
+    sockets_by_url = {}
+
+    def factory(url):
+        socket = _FakeWebSocket()
+        sockets_by_url.setdefault(url, []).append(socket)
+        return socket
+
+    config = replace(CryptoTradingConfig(), state_dir=tmp_path)
+    service = OKXStreamService(
+        config,
+        symbols=("BTC",),
+        ws_factory=factory,
+        monotonic=lambda: clock[0],
+        sleep=lambda _seconds: None,
+        subscription_stale_seconds=120,
+    )
+    service.start()
+    business_connection = next(
+        item for item in service._connections if "business" in item.url
+    )
+    old_socket = business_connection.socket
+
+    clock[0] = 121.0
+    service._maintain(business_connection)
+    service.stop()
+
+    assert service._reconnects == 1
+    assert old_socket.closed is True
+    assert len(sockets_by_url[config.resolved_okx_ws_business_url]) == 2
+    replacement = sockets_by_url[config.resolved_okx_ws_business_url][1]
+    assert len(replacement.sent) == 1
+
+
 def test_okx_stream_status_accepts_fresh_required_channels(tmp_path):
     archive = tmp_path / "events" / "okx-ws-20260720.jsonl"
     now = datetime(2026, 7, 20, 12, 0, tzinfo=UTC)
@@ -98,6 +182,25 @@ def test_okx_stream_status_accepts_fresh_required_channels(tmp_path):
     assert summary.fresh is True
     assert summary.events_read == 4
     assert {row.channel for row in summary.rows} == {"tickers", "books", "candle15m"}
+
+
+def test_okx_stream_status_allows_small_candle_delivery_delay(tmp_path):
+    archive = tmp_path / "events" / "okx-ws-20260720.jsonl"
+    now = datetime(2026, 7, 20, 12, 0, tzinfo=UTC)
+    _write_required_okx_events(archive, now - timedelta(seconds=90), symbol="BTC")
+    config = replace(CryptoTradingConfig(), state_dir=tmp_path, interval="15m")
+
+    summary = summarize_stream_status(
+        config,
+        symbols=("BTC",),
+        max_age_seconds=60,
+        now=now,
+    )
+    rows = {row.channel: row for row in summary.rows}
+
+    assert rows["candle15m"].fresh is True
+    assert rows["tickers"].fresh is False
+    assert rows["books"].fresh is False
 
 
 def test_okx_autopilot_stops_when_stream_is_missing(tmp_path, monkeypatch):
@@ -152,6 +255,18 @@ class _FakeWebSocket:
 
     def close(self):
         self.closed = True
+
+
+class _ScriptedWebSocket(_FakeWebSocket):
+    def __init__(self, script):
+        super().__init__()
+        self.script = iter(script)
+
+    def recv(self):
+        item = next(self.script)
+        if isinstance(item, BaseException):
+            raise item
+        return item
 
 
 def _okx_messages():

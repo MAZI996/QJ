@@ -114,6 +114,7 @@ class AITradeReview:
     role_notes: str
     model: str
     router: str
+    symbol: str | None = None
     raw_response: str = ""
 
 

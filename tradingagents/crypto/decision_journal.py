@@ -80,9 +80,11 @@ def workflow_report_to_dict(
         "summary": {
             "candidates_scanned": len(report.reviewed),
             "risk_approved_candidates": len(approved),
-            "final_action": _final_action(report.ai_review, approved),
-            "top_symbol": approved[0].signal.symbol if approved else None,
+            "final_action": _final_action(report, approved),
+            "top_symbol": _top_symbol(report, approved),
             "ai_error": report.ai_error,
+            "execution_requested": report.execution_requested,
+            "execution_gate_reason": report.execution_gate_reason,
         },
         "ai_review": _ai_review(report.ai_review),
         "roles": [_role_report(item) for item in report.role_reports],
@@ -91,14 +93,25 @@ def workflow_report_to_dict(
 
 
 def _final_action(
-    ai_review: AITradeReview | None,
+    report: CryptoWorkflowReport,
     approved: tuple[ReviewedSignal, ...],
 ) -> str:
     if not approved:
         return "REJECT"
-    if ai_review and ai_review.action != "BUY":
+    if report.execution_requested and report.execution_gate_reason:
+        return "HOLD"
+    if report.ai_review and report.ai_review.action != "BUY":
         return "HOLD"
     return "BUY"
+
+
+def _top_symbol(
+    report: CryptoWorkflowReport,
+    approved: tuple[ReviewedSignal, ...],
+) -> str | None:
+    if report.ai_review and report.ai_review.symbol:
+        return report.ai_review.symbol
+    return approved[0].signal.symbol if approved else None
 
 
 def _ai_review(review: AITradeReview | None) -> dict[str, Any] | None:
@@ -106,6 +119,7 @@ def _ai_review(review: AITradeReview | None) -> dict[str, Any] | None:
         return None
     return {
         "action": review.action,
+        "symbol": review.symbol,
         "confidence": review.confidence,
         "summary": review.summary,
         "main_risk": review.main_risk,
