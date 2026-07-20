@@ -63,6 +63,12 @@ class CryptoTradingConfig:
     okx_inst_type: str = "SWAP"
     okx_quote_ccy: str = "USDT"
     okx_max_leverage: int = 1
+    okx_demo_execution_enabled: bool = False
+    okx_td_mode: str = "cross"
+    okx_require_net_mode: bool = True
+    okx_require_protective_orders: bool = True
+    okx_order_poll_attempts: int = 5
+    okx_order_poll_interval_seconds: float = 0.25
     hyperliquid_base_url: str | None = None
     hyperliquid_testnet: bool = True
     hyperliquid_wallet_address: str = ""
@@ -213,6 +219,21 @@ class CryptoTradingConfig:
             okx_inst_type=os.getenv(prefix + "OKX_INST_TYPE", "SWAP").strip().upper() or "SWAP",
             okx_quote_ccy=os.getenv(prefix + "OKX_QUOTE_CCY", "USDT").strip().upper() or "USDT",
             okx_max_leverage=_int_env(prefix + "OKX_MAX_LEVERAGE", 1),
+            okx_demo_execution_enabled=_bool_env(
+                prefix + "OKX_DEMO_EXECUTION_ENABLED",
+                False,
+            ),
+            okx_td_mode=os.getenv(prefix + "OKX_TD_MODE", "cross").strip().lower() or "cross",
+            okx_require_net_mode=_bool_env(prefix + "OKX_REQUIRE_NET_MODE", True),
+            okx_require_protective_orders=_bool_env(
+                prefix + "OKX_REQUIRE_PROTECTIVE_ORDERS",
+                True,
+            ),
+            okx_order_poll_attempts=_int_env(prefix + "OKX_ORDER_POLL_ATTEMPTS", 5),
+            okx_order_poll_interval_seconds=_float_env(
+                prefix + "OKX_ORDER_POLL_INTERVAL_SECONDS",
+                0.25,
+            ),
             hyperliquid_base_url=os.getenv(prefix + "HYPERLIQUID_BASE_URL") or None,
             hyperliquid_testnet=_bool_env(prefix + "HYPERLIQUID_TESTNET", True),
             hyperliquid_wallet_address=os.getenv(prefix + "HYPERLIQUID_WALLET_ADDRESS", ""),

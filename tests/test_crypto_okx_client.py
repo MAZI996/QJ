@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import base64
+import hashlib
+import hmac
 import json
 import urllib.parse
 from dataclasses import replace
@@ -148,8 +151,8 @@ def test_okx_client_maps_public_market_payloads(monkeypatch):
     assert rules.symbol == "BTC"
     assert rules.base_asset == "BTC"
     assert rules.quote_asset == "USDT"
-    assert rules.min_qty == 0.01
-    assert rules.step_size == 0.01
+    assert rules.min_qty == 0.0001
+    assert rules.step_size == 0.0001
 
     instrument = client.get_instrument("BTC")
     assert instrument.contract_type == "linear"
@@ -217,6 +220,60 @@ def test_okx_signed_balance_uses_read_only_headers(monkeypatch):
     assert balances[0].locked == 5.6
 
 
+def test_okx_signed_post_signs_the_exact_compact_json_body(monkeypatch):
+    captured = {}
+
+    def fake_urlopen(request, timeout):
+        captured["method"] = request.method
+        captured["body"] = request.data.decode("utf-8")
+        captured["headers"] = {key.lower(): value for key, value in request.header_items()}
+        return _response(
+            {
+                "code": "0",
+                "msg": "",
+                "data": [{"ordId": "123", "clOrdId": "ta123", "sCode": "0"}],
+            }
+        )
+
+    monkeypatch.setattr("tradingagents.crypto.okx_client.urllib.request.urlopen", fake_urlopen)
+    monkeypatch.setattr(
+        "tradingagents.crypto.okx_client._okx_timestamp",
+        lambda: "2026-07-20T12:00:00.000Z",
+    )
+    config = replace(
+        CryptoTradingConfig(),
+        okx_api_key="key",
+        okx_api_secret="secret",
+        okx_api_passphrase="passphrase",
+    )
+    params = {
+        "instId": "BTC-USDT-SWAP",
+        "tdMode": "cross",
+        "side": "buy",
+        "ordType": "market",
+        "sz": "10",
+    }
+
+    acknowledgement = OKXClient(config).place_order(params)
+
+    expected_body = json.dumps(params, separators=(",", ":"))
+    prehash = (
+        "2026-07-20T12:00:00.000Z"
+        "POST"
+        "/api/v5/trade/order"
+        f"{expected_body}"
+    )
+    expected_signature = base64.b64encode(
+        hmac.new(b"secret", prehash.encode("utf-8"), hashlib.sha256).digest()
+    ).decode("ascii")
+    assert captured["method"] == "POST"
+    assert captured["body"] == expected_body
+    assert captured["headers"]["content-type"] == "application/json"
+    assert captured["headers"]["ok-access-sign"] == expected_signature
+    assert captured["headers"]["x-simulated-trading"] == "1"
+    assert acknowledgement["ordId"] == "123"
+
+
 def test_engine_defaults_to_okx_and_blocks_okx_live_execution():
     config = CryptoTradingConfig()
     engine = CryptoTradingEngine(config)
@@ -238,7 +295,7 @@ def test_engine_defaults_to_okx_and_blocks_okx_live_execution():
     )
 
     assert result.accepted is False
-    assert "OKX execution adapter is not enabled yet" in result.message
+    assert "OKX demo execution is disabled" in result.message
 
 
 def test_okx_risk_rejects_leverage_above_one():

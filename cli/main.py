@@ -2533,6 +2533,48 @@ def crypto_okx_markets(
     console.print(table)
 
 
+@app.command("crypto-okx-demo-readiness")
+def crypto_okx_demo_readiness(
+    symbol: str = typer.Option(
+        "BTC",
+        "--symbol",
+        help="OKX coin or SWAP instrument used for signed readiness checks.",
+    ),
+):
+    """Check whether guarded OKX demo execution can be enabled safely."""
+
+    from dataclasses import replace
+
+    from tradingagents.crypto import CryptoTradingConfig, OKXExecutionAdapter
+
+    config = replace(CryptoTradingConfig.from_env(), exchange_provider="okx")
+    report = OKXExecutionAdapter(config).readiness(symbol)
+    color = "green" if report.ready else "red"
+    console.print(
+        Panel(
+            f"symbol={report.symbol} | ready={report.ready}",
+            title="OKX Demo Execution Readiness",
+            border_style=color,
+        )
+    )
+    table = Table(title="OKX Demo Checks", box=box.SIMPLE_HEAVY)
+    table.add_column("Check", style="bold")
+    table.add_column("Status")
+    table.add_column("Message")
+    for check in report.checks:
+        status_style = {
+            "PASS": "green",
+            "WARN": "yellow",
+            "FAIL": "red",
+        }.get(check.status, "white")
+        table.add_row(
+            check.name,
+            f"[{status_style}]{check.status}[/{status_style}]",
+            check.message,
+        )
+    console.print(table)
+
+
 @app.command("crypto-hyperliquid-check")
 def crypto_hyperliquid_check(
     symbol: str = typer.Option(

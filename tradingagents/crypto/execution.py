@@ -5,6 +5,8 @@ from __future__ import annotations
 from .config import CryptoTradingConfig
 from .hyperliquid_execution import HyperliquidExecutionAdapter
 from .models import ExecutionMode, OrderIntent, OrderResult
+from .okx_client import OKXClient
+from .okx_execution import OKXExecutionAdapter
 from .paper import PaperBroker
 from .positions import PositionStore
 from .protective_orders import plan_from_intent
@@ -17,6 +19,10 @@ class ExecutionRouter:
         self.paper = PaperBroker(config)
         self.positions = PositionStore.from_state_dir(config.state_dir)
         self.hyperliquid_execution = HyperliquidExecutionAdapter(config)
+        self.okx_execution = OKXExecutionAdapter(
+            config,
+            client=client if isinstance(client, OKXClient) else None,
+        )
 
     def execute(
         self,
@@ -58,17 +64,14 @@ class ExecutionRouter:
             return result
 
         if provider == "okx":
-            return OrderResult(
-                mode=selected_mode,
-                accepted=False,
-                symbol=intent.symbol,
-                side=intent.side,
-                quantity=intent.quantity,
-                message=(
-                    "OKX execution adapter is not enabled yet. "
-                    "Use analysis or paper mode until OKX demo order flow is implemented."
-                ),
+            result = self.okx_execution.execute(
+                intent,
+                selected_mode,
+                live_confirmation=live_confirmation,
             )
+            if selected_mode == "testnet" and result.accepted:
+                self.positions.apply_order_result(intent, result)
+            return result
 
         if selected_mode == "testnet":
             payload = self.client.test_market_order(intent.symbol, intent.side, intent.quantity)

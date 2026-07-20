@@ -118,8 +118,15 @@ from .okx_client import (
     OKXInstrument,
     OKXOpenInterest,
     OKXOrderBook,
+    OKXTransportError,
 )
 from .okx_diagnostics import OKXDiagnosticReport, OKXDiagnostics
+from .okx_execution import (
+    OKXExecutionAdapter,
+    OKXExecutionCheck,
+    OKXExecutionError,
+    OKXExecutionReadiness,
+)
 from .okx_stream import (
     OKXEventArchive,
     OKXStreamError,
@@ -229,10 +236,15 @@ __all__ = [
     "OKXDiagnosticReport",
     "OKXDiagnostics",
     "OKXEventArchive",
+    "OKXExecutionAdapter",
+    "OKXExecutionCheck",
+    "OKXExecutionError",
+    "OKXExecutionReadiness",
     "OKXFundingRate",
     "OKXInstrument",
     "OKXOpenInterest",
     "OKXOrderBook",
+    "OKXTransportError",
     "OKXStreamError",
     "OKXStreamEvent",
     "OKXStreamRunSummary",

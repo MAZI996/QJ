@@ -1,7 +1,7 @@
 """OKX REST client for the crypto trading center.
 
-This adapter starts with market data and read-only account balance endpoints.
-Order placement is intentionally handled by a separate execution adapter later.
+This client exposes public market data plus the signed account and trade
+endpoints used by the separately guarded demo execution adapter.
 """
 
 from __future__ import annotations
@@ -23,6 +23,10 @@ from .models import AccountBalance, Candle, OpenInterestPoint, SymbolRules, Tick
 
 class OKXAPIError(RuntimeError):
     """Raised when OKX returns a non-OK response or invalid payload."""
+
+
+class OKXTransportError(OKXAPIError):
+    """Raised when an OKX request has an ambiguous transport outcome."""
 
 
 @dataclass(frozen=True)
@@ -234,14 +238,19 @@ class OKXClient:
 
     def get_symbol_rules(self, symbol: str) -> SymbolRules:
         instrument = self.get_instrument(symbol)
+        min_qty = instrument.min_size
+        step_size = instrument.lot_size
+        if instrument.contract_type == "linear" and instrument.contract_value > 0:
+            min_qty *= instrument.contract_value
+            step_size *= instrument.contract_value
         return SymbolRules(
             symbol=self.normalize_symbol(instrument.inst_id),
             base_asset=instrument.base_ccy,
             quote_asset=instrument.quote_ccy
             or instrument.settle_ccy
             or self.config.okx_quote_ccy,
-            min_qty=instrument.min_size,
-            step_size=instrument.lot_size,
+            min_qty=min_qty,
+            step_size=step_size,
             min_notional=self.config.min_order_notional_usdt,
         )
 
@@ -322,6 +331,77 @@ class OKXClient:
                     )
         return balances
 
+    @property
+    def has_credentials(self) -> bool:
+        return bool(
+            self.config.okx_api_key
+            and self.config.okx_api_secret
+            and self.config.okx_api_passphrase
+        )
+
+    def get_account_config(self) -> dict[str, Any]:
+        rows = self._signed_get("/api/v5/account/config", {})
+        if not rows or not isinstance(rows[0], dict):
+            raise OKXAPIError("No OKX account configuration returned.")
+        return rows[0]
+
+    def get_leverage_info(self, symbol: str, margin_mode: str) -> list[dict[str, Any]]:
+        inst_id = self.instrument_id(symbol)
+        rows = self._signed_get(
+            "/api/v5/account/leverage-info",
+            {"instId": inst_id, "mgnMode": margin_mode},
+        )
+        return [row for row in rows if isinstance(row, dict)]
+
+    def get_positions(self, symbol: str) -> list[dict[str, Any]]:
+        inst_id = self.instrument_id(symbol)
+        rows = self._signed_get("/api/v5/account/positions", {"instId": inst_id})
+        return [row for row in rows if isinstance(row, dict)]
+
+    def place_order(self, params: Mapping[str, Any]) -> dict[str, Any]:
+        rows = self._signed_post("/api/v5/trade/order", params)
+        if not rows or not isinstance(rows[0], dict):
+            raise OKXAPIError("No OKX order acknowledgement returned.")
+        return rows[0]
+
+    def get_order(
+        self,
+        symbol: str,
+        *,
+        order_id: str = "",
+        client_order_id: str = "",
+    ) -> dict[str, Any]:
+        if not order_id and not client_order_id:
+            raise OKXAPIError("OKX order query requires order_id or client_order_id.")
+        params: dict[str, str] = {"instId": self.instrument_id(symbol)}
+        if order_id:
+            params["ordId"] = order_id
+        else:
+            params["clOrdId"] = client_order_id
+        rows = self._signed_get("/api/v5/trade/order", params)
+        if not rows or not isinstance(rows[0], dict):
+            raise OKXAPIError("No OKX order details returned.")
+        return rows[0]
+
+    def cancel_order(
+        self,
+        symbol: str,
+        *,
+        order_id: str = "",
+        client_order_id: str = "",
+    ) -> dict[str, Any]:
+        if not order_id and not client_order_id:
+            raise OKXAPIError("OKX order cancellation requires order_id or client_order_id.")
+        params: dict[str, str] = {"instId": self.instrument_id(symbol)}
+        if order_id:
+            params["ordId"] = order_id
+        else:
+            params["clOrdId"] = client_order_id
+        rows = self._signed_post("/api/v5/trade/cancel-order", params)
+        if not rows or not isinstance(rows[0], dict):
+            raise OKXAPIError("No OKX cancellation acknowledgement returned.")
+        return rows[0]
+
     @classmethod
     def normalize_symbol(cls, symbol: str) -> str:
         clean = str(symbol).strip().upper().replace("_", "-")
@@ -366,18 +446,24 @@ class OKXClient:
         return payload
 
     def _signed_get(self, path: str, params: Mapping[str, Any]) -> list[Any]:
-        if (
-            not self.config.okx_api_key
-            or not self.config.okx_api_secret
-            or not self.config.okx_api_passphrase
-        ):
-            raise OKXAPIError(
-                "OKX API key, secret, and passphrase are required for signed read-only requests."
-            )
+        self._require_credentials()
         payload = self._request("GET", path, params=params, signed=True)
         if not isinstance(payload, list):
             raise OKXAPIError(f"OKX {path} returned non-list data.")
         return payload
+
+    def _signed_post(self, path: str, body: Mapping[str, Any]) -> list[Any]:
+        self._require_credentials()
+        payload = self._request("POST", path, body=body, signed=True)
+        if not isinstance(payload, list):
+            raise OKXAPIError(f"OKX {path} returned non-list data.")
+        return payload
+
+    def _require_credentials(self) -> None:
+        if not self.has_credentials:
+            raise OKXAPIError(
+                "OKX API key, secret, and passphrase are required for signed requests."
+            )
 
     def _request(
         self,
@@ -385,6 +471,7 @@ class OKXClient:
         path: str,
         *,
         params: Mapping[str, Any] | None = None,
+        body: Mapping[str, Any] | None = None,
         signed: bool = False,
     ) -> Any:
         params = params or {}
@@ -392,20 +479,35 @@ class OKXClient:
         request_path = path + (f"?{encoded}" if encoded else "")
         url = f"{self.config.resolved_okx_base_url}{request_path}"
         headers = {"User-Agent": "TradingAgents-Crypto/0.1"}
+        body_text = ""
+        request_data = None
+        if body is not None:
+            body_text = json.dumps(body, separators=(",", ":"), ensure_ascii=False)
+            request_data = body_text.encode("utf-8")
+            headers["Content-Type"] = "application/json"
         if self.config.okx_demo:
             headers["x-simulated-trading"] = "1"
         if signed:
-            headers.update(self._signed_headers(method, request_path, body=""))
+            headers.update(self._signed_headers(method, request_path, body=body_text))
 
-        request = urllib.request.Request(url, method=method, headers=headers)
+        request = urllib.request.Request(
+            url,
+            data=request_data,
+            method=method,
+            headers=headers,
+        )
         try:
             with urllib.request.urlopen(request, timeout=20) as response:
                 raw = response.read().decode("utf-8")
         except urllib.error.HTTPError as exc:
             body = exc.read().decode("utf-8", errors="replace")
+            if exc.code == 408 or exc.code >= 500:
+                raise OKXTransportError(f"OKX HTTP {exc.code}: {body}") from exc
             raise OKXAPIError(f"OKX HTTP {exc.code}: {body}") from exc
         except urllib.error.URLError as exc:
-            raise OKXAPIError(f"OKX request failed: {exc.reason}") from exc
+            raise OKXTransportError(f"OKX request failed: {exc.reason}") from exc
+        except TimeoutError as exc:
+            raise OKXTransportError("OKX request timed out.") from exc
 
         try:
             payload = json.loads(raw)

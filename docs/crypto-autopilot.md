@@ -51,9 +51,26 @@ Paper loop with automatic reduce-only exits for locally tracked positions:
 python -m cli.main crypto-autopilot --symbols BTC,ETH,SOL,XRP --mode paper --execute-top --auto-close --cycles 0 --interval-seconds 300
 ```
 
-OKX demo order execution is not implemented yet. The existing testnet and live
-execution commands below are legacy Hyperliquid-only routes and require an
-explicit provider switch.
+OKX guarded demo execution is available after the explicit execution switch,
+demo credentials, net position mode, 1x leverage, and protective-order checks
+all pass:
+
+```powershell
+.\scripts\crypto_okx_env_template.ps1
+$env:TRADINGAGENTS_CRYPTO_OKX_API_KEY="..."
+$env:TRADINGAGENTS_CRYPTO_OKX_API_SECRET="..."
+$env:TRADINGAGENTS_CRYPTO_OKX_API_PASSPHRASE="..."
+$env:TRADINGAGENTS_CRYPTO_OKX_DEMO_EXECUTION_ENABLED="true"
+python -m cli.main crypto-okx-demo-readiness --symbol BTC
+python -m cli.main crypto-autopilot --symbols BTC,ETH,SOL,XRP --mode testnet --execute-top --auto-close --cycles 12 --interval-seconds 300
+```
+
+OKX BUY orders include exchange-side attached mark-price TP/SL protection.
+Automatic SELL exits are reduce-only and capped to the actual positive net long
+position returned by OKX. Real OKX execution remains hard blocked.
+
+The commands below are for the legacy Hyperliquid route and require an explicit
+provider switch.
 
 Hyperliquid testnet execution:
 

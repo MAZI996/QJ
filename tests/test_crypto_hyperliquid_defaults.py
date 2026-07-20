@@ -34,6 +34,10 @@ def test_crypto_config_defaults_to_okx(monkeypatch):
     assert config.okx_demo is True
     assert config.okx_inst_type == "SWAP"
     assert config.okx_max_leverage == 1
+    assert config.okx_demo_execution_enabled is False
+    assert config.okx_td_mode == "cross"
+    assert config.okx_require_net_mode is True
+    assert config.okx_require_protective_orders is True
     assert config.resolved_okx_ws_public_url.endswith("/ws/v5/public")
     assert config.resolved_okx_ws_business_url.endswith("/ws/v5/business")
     assert config.live_confirm_phrase == "I_UNDERSTAND_THIS_PLACES_REAL_OKX_ORDERS"

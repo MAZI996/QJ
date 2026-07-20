@@ -9,7 +9,8 @@ but new market-data and execution work should target OKX first.
 - Default provider: `okx`
 - Default OKX mode: demo header enabled with `TRADINGAGENTS_CRYPTO_OKX_DEMO=true`
 - Default execution mode: `analysis`
-- Live orders: disabled until a dedicated OKX execution adapter and readiness gate exist
+- Demo orders: disabled until the explicit demo-execution switch and readiness gate pass
+- Live orders: hard blocked; the OKX adapter accepts demo `testnet` mode only
 - Strategy path: scanner -> TradingAgents AI review -> risk manager -> execution router
 - LLM/Hermes can review signals, but cannot bypass deterministic risk checks
 
@@ -21,7 +22,7 @@ Use the safe template first:
 .\scripts\crypto_okx_env_template.ps1
 ```
 
-Optional read-only account checks require OKX API credentials:
+Signed account checks and demo execution require OKX demo API credentials:
 
 ```powershell
 $env:TRADINGAGENTS_CRYPTO_OKX_API_KEY = "..."
@@ -30,6 +31,10 @@ $env:TRADINGAGENTS_CRYPTO_OKX_API_PASSPHRASE = "..."
 ```
 
 Do not paste secrets into chat or commit them to the repository.
+
+Create a demo-only key with trading permission and without withdrawal
+permission. Configure the OKX account in net position mode and set the selected
+USDT perpetual contract leverage to 1 before enabling execution.
 
 ## Public Diagnostics
 
@@ -41,6 +46,38 @@ Do not paste secrets into chat or commit them to the repository.
 The diagnostic command checks public time, ticker, order book, candles, and
 instrument rules. Add `--include-balance` only after read-only OKX credentials
 are configured.
+
+## Demo Execution Readiness
+
+The safe environment template leaves demo execution disabled. After demo
+credentials and the OKX account settings are ready, enable only the demo switch:
+
+```powershell
+$env:TRADINGAGENTS_CRYPTO_OKX_DEMO_EXECUTION_ENABLED = "true"
+$env:TRADINGAGENTS_CRYPTO_PROTECTIVE_OCO_ENABLED = "true"
+.\.venv\Scripts\python.exe -m cli.main crypto-okx-demo-readiness --symbol BTC
+```
+
+Readiness verifies the demo header, explicit execution switch, trade permission,
+absence of withdrawal permission, linear USDT perpetual metadata, net position
+mode, actual account leverage, and exchange-side protective-order
+configuration. It also requires a configured, inactive emergency-stop file. It
+does not place an order.
+
+When readiness is green, a guarded unattended demo loop is available through
+the existing TradingAgents chain:
+
+```powershell
+.\.venv\Scripts\python.exe -m cli.main crypto-autopilot --symbols BTC,ETH,SOL,XRP --mode testnet --execute-top --auto-close --cycles 12 --interval-seconds 300
+```
+
+BUY intents are converted from base-coin quantity to OKX contract size and are
+submitted with attached mark-price TP/SL orders. SELL intents must be
+reduce-only; the adapter reads the actual positive net long position and caps
+the close size before submission. Local positions are updated only from a
+confirmed OKX fill. If a transport timeout makes an acknowledged order
+ambiguous, the adapter recovers it by client order ID; an unresolved order
+activates the emergency-stop file so another entry cannot be submitted.
 
 ## Analysis Scan
 
@@ -84,12 +121,12 @@ events before entries are allowed.
 
 ## Current Boundary
 
-This layer can analyze OKX market data, enforce the OKX market-quality gate, and
-archive live public WebSocket events.
-It does not yet submit OKX orders or auto-close OKX positions. The next safe
-steps are:
+This layer can analyze OKX market data, enforce market-quality and deterministic
+risk gates, archive public WebSocket events, submit guarded demo entries, and
+send reduce-only demo exits. Real OKX orders remain unavailable even when the
+global live switch and confirmation phrase are supplied.
 
-1. Add OKX demo order adapter for entry and reduce-only exits.
-2. Add OKX live-readiness checks for account mode, permissions, leverage,
-   position mode, protective orders, emergency stop, and paper evidence.
-3. Promote from analysis/paper to demo execution only after diagnostics pass.
+The next promotion gate is operational evidence: configure demo credentials,
+pass readiness, run a minimum-size demo entry and protected exit, verify order
+recovery, then collect sustained paper/demo evidence before designing a
+separate live-readiness path.
