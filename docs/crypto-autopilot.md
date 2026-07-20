@@ -40,6 +40,26 @@ OpenAI-compatible API should set
 single-query command without enabling toolsets. Keep `--execute-top` disabled
 until at least one analysis cycle records a successful AI review.
 
+For a Hostinger Hermes container, install the version-controlled analysis-only
+watchdog into Hermes and schedule it without an agent:
+
+```bash
+install -m 700 scripts/hermes/okx_analysis_watchdog.sh \
+  /opt/data/.hermes/scripts/okx_analysis_watchdog.sh
+hermes cron create "every 5m" \
+  --name "QJ OKX analysis-only" \
+  --deliver local \
+  --script okx_analysis_watchdog.sh \
+  --no-agent \
+  --workdir /opt/data/projects/QJ-current
+```
+
+The watchdog removes inherited OKX credentials, forces analysis mode, keeps
+the demo execution switch off, enforces the 1x leverage policy, prevents
+overlapping cycles, and restarts the public OKX stream when it is absent.
+Successful ticks are silent; reports and logs are written beneath
+`TRADINGAGENTS_CRYPTO_STATE_DIR`.
+
 Start the real-time stream first for unattended operation:
 
 ```powershell
