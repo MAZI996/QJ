@@ -112,6 +112,17 @@ from .hyperliquid_stream import (
 )
 from .okx_client import OKXAPIError, OKXBookLevel, OKXClient, OKXInstrument, OKXOrderBook
 from .okx_diagnostics import OKXDiagnosticReport, OKXDiagnostics
+from .okx_stream import (
+    OKXEventArchive,
+    OKXStreamError,
+    OKXStreamEvent,
+    OKXStreamRunSummary,
+    OKXStreamService,
+    OKXStreamSubscription,
+    default_okx_stream_archive_path,
+    okx_candle_channel,
+    okx_stream_event_from_message,
+)
 from .live_readiness import (
     LiveReadinessChecker,
     LiveReadinessReport,
@@ -209,8 +220,14 @@ __all__ = [
     "OKXClient",
     "OKXDiagnosticReport",
     "OKXDiagnostics",
+    "OKXEventArchive",
     "OKXInstrument",
     "OKXOrderBook",
+    "OKXStreamError",
+    "OKXStreamEvent",
+    "OKXStreamRunSummary",
+    "OKXStreamService",
+    "OKXStreamSubscription",
     "LiveReadinessChecker",
     "LiveReadinessReport",
     "MarketQualityDecision",
@@ -251,6 +268,7 @@ __all__ = [
     "adoption_sources",
     "build_paper_queue_plan",
     "default_stream_archive_path",
+    "default_okx_stream_archive_path",
     "evolution_html_output_path",
     "evolution_archive_sections",
     "evolution_champion_cache_path",
@@ -269,6 +287,8 @@ __all__ = [
     "load_runtime_champion_config",
     "load_evolution_preset",
     "monte_carlo_trade_review",
+    "okx_candle_channel",
+    "okx_stream_event_from_message",
     "paper_queue_output_paths",
     "render_evolution_preset_html",
     "render_evolution_preset_markdown",

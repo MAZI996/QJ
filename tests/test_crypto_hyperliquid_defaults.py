@@ -34,6 +34,8 @@ def test_crypto_config_defaults_to_okx(monkeypatch):
     assert config.okx_demo is True
     assert config.okx_inst_type == "SWAP"
     assert config.okx_max_leverage == 1
+    assert config.resolved_okx_ws_public_url.endswith("/ws/v5/public")
+    assert config.resolved_okx_ws_business_url.endswith("/ws/v5/business")
     assert config.live_confirm_phrase == "I_UNDERSTAND_THIS_PLACES_REAL_OKX_ORDERS"
     assert config.hyperliquid_sdk_execution_enabled is False
     assert config.hyperliquid_require_protective_orders is True
@@ -373,7 +375,12 @@ def test_paper_status_summarizes_stream_evidence(tmp_path):
         ),
         encoding="utf-8",
     )
-    config = replace(CryptoTradingConfig(), state_dir=tmp_path, symbols=("BTC",))
+    config = replace(
+        CryptoTradingConfig(),
+        exchange_provider="hyperliquid",
+        state_dir=tmp_path,
+        symbols=("BTC",),
+    )
 
     summary = summarize_paper_status(config, stream_max_age_seconds=600)
 

@@ -13,7 +13,12 @@ from tradingagents.crypto.workflow_report import CryptoWorkflowReport
 
 
 def test_autopilot_stops_before_scan_when_stream_is_missing(tmp_path, monkeypatch):
-    config = replace(CryptoTradingConfig(), state_dir=tmp_path, symbols=("BTC",))
+    config = replace(
+        CryptoTradingConfig(),
+        exchange_provider="hyperliquid",
+        state_dir=tmp_path,
+        symbols=("BTC",),
+    )
 
     def fail_engine(_config):
         raise AssertionError("scanner engine should not start when stream evidence is stale")
@@ -34,7 +39,12 @@ def test_autopilot_stops_before_scan_when_stream_is_missing(tmp_path, monkeypatc
 
 
 def test_autopilot_can_bypass_stream_gate_for_manual_diagnostics(tmp_path, monkeypatch):
-    config = replace(CryptoTradingConfig(), state_dir=tmp_path, symbols=("BTC",))
+    config = replace(
+        CryptoTradingConfig(),
+        exchange_provider="hyperliquid",
+        state_dir=tmp_path,
+        symbols=("BTC",),
+    )
     _patch_workflow(monkeypatch, mode="analysis")
 
     result = CryptoAutoPilot(config).run_once(
@@ -52,7 +62,12 @@ def test_autopilot_records_fresh_stream_context(tmp_path, monkeypatch):
     archive = tmp_path / "events" / "hyperliquid-ws-20260720.jsonl"
     _write_required_events(archive, datetime.now(UTC), symbol="BTC")
     captured = _patch_workflow(monkeypatch, mode="paper")
-    config = replace(CryptoTradingConfig(), state_dir=tmp_path, symbols=("BTC",))
+    config = replace(
+        CryptoTradingConfig(),
+        exchange_provider="hyperliquid",
+        state_dir=tmp_path,
+        symbols=("BTC",),
+    )
 
     result = CryptoAutoPilot(config).run_once(
         symbols=("BTC",),

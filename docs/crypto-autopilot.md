@@ -1,13 +1,17 @@
 # Crypto Autopilot
 
-`crypto-autopilot` is the unattended loop for the Hyperliquid crypto extension. It
+`crypto-autopilot` is the unattended loop for the crypto extension. It
 repeatedly runs the TradingAgents crypto workflow, writes the decision journal,
 and optionally executes only the top risk-approved signal in the selected mode.
+
+2026-07-20 update: OKX is the default provider. The fresh-stream gate is now
+provider-aware: OKX expects `okx-ws-*.jsonl`, while the legacy Hyperliquid route
+still expects `hyperliquid-ws-*.jsonl`.
 
 The default is intentionally safe:
 
 ```powershell
-python -m cli.main crypto-autopilot --symbols BTC,ETH,SOL,HYPE --mode analysis --no-require-fresh-stream
+python -m cli.main crypto-autopilot --symbols BTC,ETH,SOL,XRP --mode analysis --no-require-fresh-stream
 ```
 
 Defaults:
@@ -18,44 +22,50 @@ Defaults:
 - `--execute-top false`: no execution unless explicitly requested.
 - `--auto-close false`: position exits are inspected but reduce-only close
   orders are not submitted unless explicitly requested.
-- `--require-fresh-stream true`: new scans and entries stop when the local
-  Hyperliquid WebSocket archive is missing or stale.
+- `--require-fresh-stream true`: new scans and entries stop when the configured
+  exchange WebSocket archive is missing or stale.
 - `--fusion true`: high-star strategy fusion is enabled.
 - Reports are written to `TRADINGAGENTS_CRYPTO_STATE_DIR`.
 
 Start the real-time stream first for unattended operation:
 
 ```powershell
-python -m cli.main crypto-hyperliquid-stream --mainnet --symbols BTC,ETH,SOL,HYPE --seconds 0
+python -m cli.main crypto-okx-stream --symbols BTC,ETH,SOL,XRP --seconds 0 --demo
 ```
 
 Check local stream freshness:
 
 ```powershell
-python -m cli.main crypto-hyperliquid-stream-status --symbols BTC,ETH,SOL,HYPE --max-age-seconds 600
+python -m cli.main crypto-okx-stream-status --symbols BTC,ETH,SOL,XRP --max-age-seconds 600
 ```
 
 Service-style loop:
 
 ```powershell
-python -m cli.main crypto-autopilot --symbols BTC,ETH,SOL,HYPE --mode paper --execute-top --cycles 0 --interval-seconds 300
+python -m cli.main crypto-autopilot --symbols BTC,ETH,SOL,XRP --mode paper --execute-top --cycles 0 --interval-seconds 300
 ```
 
 Paper loop with automatic reduce-only exits for locally tracked positions:
 
 ```powershell
-python -m cli.main crypto-autopilot --symbols BTC,ETH,SOL,HYPE --mode paper --execute-top --auto-close --cycles 0 --interval-seconds 300
+python -m cli.main crypto-autopilot --symbols BTC,ETH,SOL,XRP --mode paper --execute-top --auto-close --cycles 0 --interval-seconds 300
 ```
 
-Testnet execution:
+OKX demo order execution is not implemented yet. The existing testnet and live
+execution commands below are legacy Hyperliquid-only routes and require an
+explicit provider switch.
+
+Hyperliquid testnet execution:
 
 ```powershell
+$env:TRADINGAGENTS_CRYPTO_EXCHANGE_PROVIDER="hyperliquid"
 python -m cli.main crypto-autopilot --symbols BTC,ETH --mode testnet --execute-top --auto-close --cycles 12 --interval-seconds 300
 ```
 
-Live execution requires all live guards:
+Hyperliquid live execution requires all live guards:
 
 ```powershell
+$env:TRADINGAGENTS_CRYPTO_EXCHANGE_PROVIDER="hyperliquid"
 python -m cli.main crypto-autopilot --symbols BTC,ETH --mode live --execute-top --auto-close --allow-live --live-confirm I_UNDERSTAND_THIS_PLACES_REAL_HYPERLIQUID_ORDERS
 ```
 

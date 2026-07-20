@@ -1,4 +1,4 @@
-"""Read Hyperliquid WebSocket archives and report data freshness."""
+"""Read exchange WebSocket archives and report data freshness."""
 
 from __future__ import annotations
 
@@ -11,10 +11,22 @@ from typing import Any
 
 from .config import CryptoTradingConfig
 from .hyperliquid_client import HyperliquidClient
+from .okx_client import OKXClient
+from .okx_stream import okx_candle_channel
 
 
-REQUIRED_SYMBOL_CHANNELS: tuple[str, ...] = ("l2Book", "trades", "candle", "activeAssetCtx")
-GLOBAL_CHANNELS: tuple[str, ...] = ("allMids",)
+HYPERLIQUID_REQUIRED_SYMBOL_CHANNELS: tuple[str, ...] = (
+    "l2Book",
+    "trades",
+    "candle",
+    "activeAssetCtx",
+)
+HYPERLIQUID_GLOBAL_CHANNELS: tuple[str, ...] = ("allMids",)
+OKX_BASE_REQUIRED_SYMBOL_CHANNELS: tuple[str, ...] = ("tickers", "books")
+OKX_GLOBAL_CHANNELS: tuple[str, ...] = ()
+
+REQUIRED_SYMBOL_CHANNELS = HYPERLIQUID_REQUIRED_SYMBOL_CHANNELS
+GLOBAL_CHANNELS = HYPERLIQUID_GLOBAL_CHANNELS
 
 
 @dataclass(frozen=True)
@@ -30,6 +42,7 @@ class StreamFreshnessRow:
 
 @dataclass(frozen=True)
 class StreamStatusSummary:
+    provider: str
     archive_paths: tuple[Path, ...]
     symbols: tuple[str, ...]
     max_age_seconds: int
@@ -62,12 +75,11 @@ def summarize_stream_status(
     max_lines_per_file: int = 5000,
     now: datetime | None = None,
 ) -> StreamStatusSummary:
-    selected = tuple(
-        HyperliquidClient.normalize_symbol(symbol)
-        for symbol in (symbols or config.symbols)
-        if symbol.strip()
-    )
-    paths = _archive_paths(config.state_dir, archive_path)
+    provider = config.exchange_provider.strip().lower() or "okx"
+    normalizer = _symbol_normalizer(provider)
+    selected = tuple(normalizer(symbol) for symbol in (symbols or config.symbols) if symbol.strip())
+    global_channels, required_channels = _required_channels(config, provider)
+    paths = _archive_paths(config.state_dir, archive_path, provider)
     current = now or datetime.now(UTC)
     counts: dict[tuple[str, str], int] = defaultdict(int)
     latest: dict[tuple[str, str], datetime] = {}
@@ -80,7 +92,7 @@ def summarize_stream_status(
             received = _parse_time(row.get("received_at"))
             if received is None:
                 continue
-            symbols_for_row = _symbols_for_row(row, channel)
+            symbols_for_row = _symbols_for_row(row, channel, global_channels, normalizer)
             for symbol in symbols_for_row:
                 key = (symbol, channel)
                 counts[key] += 1
@@ -88,7 +100,7 @@ def summarize_stream_status(
                     latest[key] = received
 
     rows: list[StreamFreshnessRow] = []
-    for channel in GLOBAL_CHANNELS:
+    for channel in global_channels:
         rows.append(
             _freshness_row(
                 key=("*", channel),
@@ -99,7 +111,7 @@ def summarize_stream_status(
             )
         )
     for symbol in selected:
-        for channel in REQUIRED_SYMBOL_CHANNELS:
+        for channel in required_channels:
             rows.append(
                 _freshness_row(
                     key=(symbol, channel),
@@ -111,6 +123,7 @@ def summarize_stream_status(
             )
 
     return StreamStatusSummary(
+        provider=provider,
         archive_paths=paths,
         symbols=selected,
         max_age_seconds=max_age_seconds,
@@ -119,13 +132,38 @@ def summarize_stream_status(
     )
 
 
-def _archive_paths(state_dir: Path, archive_path: Path | None) -> tuple[Path, ...]:
+def _required_channels(
+    config: CryptoTradingConfig,
+    provider: str,
+) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    if provider == "okx":
+        return OKX_GLOBAL_CHANNELS, (
+            *OKX_BASE_REQUIRED_SYMBOL_CHANNELS,
+            okx_candle_channel(config.interval),
+        )
+    return HYPERLIQUID_GLOBAL_CHANNELS, HYPERLIQUID_REQUIRED_SYMBOL_CHANNELS
+
+
+def _symbol_normalizer(provider: str):
+    if provider == "okx":
+        return OKXClient.normalize_symbol
+    if provider == "hyperliquid":
+        return HyperliquidClient.normalize_symbol
+    return lambda value: str(value).strip().upper()
+
+
+def _archive_paths(
+    state_dir: Path,
+    archive_path: Path | None,
+    provider: str,
+) -> tuple[Path, ...]:
     if archive_path:
         return (archive_path,)
     event_dir = Path(state_dir) / "events"
     if not event_dir.exists():
         return ()
-    return tuple(sorted(event_dir.glob("hyperliquid-ws-*.jsonl")))
+    pattern = "okx-ws-*.jsonl" if provider == "okx" else "hyperliquid-ws-*.jsonl"
+    return tuple(sorted(event_dir.glob(pattern)))
 
 
 def _read_jsonl_tail(path: Path, max_lines: int) -> tuple[dict[str, Any], ...]:
@@ -158,16 +196,17 @@ def _parse_time(value: Any) -> datetime | None:
     return parsed.astimezone(UTC)
 
 
-def _symbols_for_row(row: dict[str, Any], channel: str) -> tuple[str, ...]:
-    if channel in GLOBAL_CHANNELS:
+def _symbols_for_row(
+    row: dict[str, Any],
+    channel: str,
+    global_channels: tuple[str, ...],
+    normalizer,
+) -> tuple[str, ...]:
+    if channel in global_channels:
         return ("*",)
     raw = row.get("symbols")
     if isinstance(raw, list):
-        return tuple(
-            HyperliquidClient.normalize_symbol(item)
-            for item in raw
-            if isinstance(item, str) and item.strip()
-        )
+        return tuple(normalizer(item) for item in raw if isinstance(item, str) and item.strip())
     return ()
 
 

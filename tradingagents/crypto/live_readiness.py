@@ -324,7 +324,7 @@ class LiveReadinessChecker:
                 "realtime_stream_evidence",
                 "PASS",
                 (
-                    f"Fresh Hyperliquid WebSocket archive found: events={summary.events_read}, "
+                    f"Fresh {summary.provider.upper()} WebSocket archive found: events={summary.events_read}, "
                     f"latest={summary.latest_event_at or '-'}"
                 ),
             )
@@ -337,8 +337,9 @@ class LiveReadinessChecker:
             "realtime_stream_evidence",
             status,
             (
-                "No fresh Hyperliquid WebSocket evidence found; run "
-                "crypto-hyperliquid-stream before live automation"
+                f"No fresh {summary.provider.upper()} WebSocket evidence found; run "
+                f"{'crypto-okx-stream' if summary.provider == 'okx' else 'crypto-hyperliquid-stream'} "
+                "before live automation"
                 f"{suffix}."
             ),
         )

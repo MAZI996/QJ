@@ -52,12 +52,41 @@ The current market-quality gate is still Hyperliquid-specific, so use
 `--no-market-quality` for early OKX scans until the OKX order-book/funding gate
 is promoted.
 
+## Real-Time Stream Archive
+
+Start a short public WebSocket archive run:
+
+```powershell
+.\.venv\Scripts\python.exe -m cli.main crypto-okx-stream --symbols BTC,ETH,SOL,XRP --interval 15m --seconds 60 --demo
+```
+
+Check freshness:
+
+```powershell
+.\.venv\Scripts\python.exe -m cli.main crypto-okx-stream-status --symbols BTC,ETH,SOL,XRP --interval 15m --max-age-seconds 600
+```
+
+The OKX freshness gate currently requires these per-symbol channels:
+
+- `tickers`
+- `books`
+- `candle15m` or the configured candle interval
+
+The stream also subscribes to `trades`, but trade messages are event-triggered
+and not required for freshness because quiet/demo markets may not emit them
+within every short check window.
+
+Autopilot now uses provider-aware stream evidence. With the default OKX provider,
+`crypto-autopilot --require-fresh-stream` expects fresh `okx-ws-*.jsonl` archive
+events before entries are allowed.
+
 ## Current Boundary
 
-This layer can analyze OKX market data. It does not yet submit OKX orders or
-auto-close OKX positions. The next safe steps are:
+This layer can analyze OKX market data and archive live public WebSocket events.
+It does not yet submit OKX orders or auto-close OKX positions. The next safe
+steps are:
 
-1. Add OKX WebSocket stream archive and freshness gate.
+1. Add OKX market-quality scoring from books/funding/open interest.
 2. Add OKX demo order adapter for entry and reduce-only exits.
 3. Add OKX live-readiness checks for account mode, permissions, leverage,
    position mode, protective orders, emergency stop, and paper evidence.

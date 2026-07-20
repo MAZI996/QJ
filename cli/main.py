@@ -2790,6 +2790,158 @@ def crypto_market_quality(
     console.print(table)
 
 
+@app.command("crypto-okx-stream")
+def crypto_okx_stream(
+    symbols: str = typer.Option(
+        "BTC,ETH,SOL,XRP",
+        "--symbols",
+        help="Comma-separated OKX coins or instruments to stream.",
+    ),
+    seconds: int = typer.Option(
+        60,
+        "--seconds",
+        help="Seconds to run. Use 0 for an uninterrupted service loop.",
+    ),
+    interval: Optional[str] = typer.Option(
+        None,
+        "--interval",
+        help="Candle interval subscription. Defaults to config interval.",
+    ),
+    demo: bool = typer.Option(
+        True,
+        "--demo/--live-api",
+        help="Use OKX demo WebSocket endpoint or live public WebSocket endpoint.",
+    ),
+    archive_path: Optional[Path] = typer.Option(
+        None,
+        "--archive-path",
+        help="Optional JSONL path. Defaults to TRADINGAGENTS_CRYPTO_STATE_DIR/events.",
+    ),
+):
+    """Archive OKX WebSocket public market events for real-time analysis."""
+
+    from dataclasses import replace
+
+    from tradingagents.crypto import (
+        CryptoTradingConfig,
+        OKXEventArchive,
+        OKXStreamError,
+        OKXStreamService,
+    )
+
+    selected = tuple(item.strip().upper() for item in symbols.split(",") if item.strip())
+    config = replace(CryptoTradingConfig.from_env(), exchange_provider="okx", okx_demo=demo)
+    archive = OKXEventArchive(archive_path) if archive_path else None
+    service = OKXStreamService(
+        config,
+        symbols=selected,
+        interval=interval,
+        archive=archive,
+    )
+    planned = service.subscription_plan()
+    console.print(
+        Panel(
+            (
+                f"url={config.resolved_okx_ws_public_url} | symbols={','.join(selected)} | "
+                f"interval={interval or config.interval} | subscriptions={len(planned)} | "
+                f"seconds={seconds}"
+            ),
+            title="OKX WebSocket Stream",
+            border_style="cyan",
+        )
+    )
+    try:
+        summary = service.run(duration_seconds=seconds)
+    except OKXStreamError as exc:
+        raise typer.BadParameter(str(exc)) from exc
+
+    console.print(
+        Panel(
+            (
+                f"subscriptions={summary.subscriptions} | events={summary.events} | "
+                f"archive={summary.archive_path}"
+            ),
+            title="OKX Stream Archive Summary",
+            border_style="green",
+        )
+    )
+
+
+@app.command("crypto-okx-stream-status")
+def crypto_okx_stream_status(
+    symbols: str = typer.Option(
+        "BTC,ETH,SOL,XRP",
+        "--symbols",
+        help="Comma-separated OKX coins or instruments to check in the archive.",
+    ),
+    max_age_seconds: int = typer.Option(
+        600,
+        "--max-age-seconds",
+        help="Maximum accepted age for each required WebSocket channel.",
+    ),
+    interval: Optional[str] = typer.Option(
+        None,
+        "--interval",
+        help="Candle interval channel to require. Defaults to config interval.",
+    ),
+    archive_path: Optional[Path] = typer.Option(
+        None,
+        "--archive-path",
+        help="Optional JSONL archive path. Defaults to TRADINGAGENTS_CRYPTO_STATE_DIR/events.",
+    ),
+):
+    """Show freshness of archived OKX WebSocket events."""
+
+    from dataclasses import replace
+
+    from tradingagents.crypto import CryptoTradingConfig, summarize_stream_status
+
+    selected = tuple(item.strip().upper() for item in symbols.split(",") if item.strip())
+    config = replace(CryptoTradingConfig.from_env(), exchange_provider="okx")
+    if interval:
+        config = replace(config, interval=interval)
+    summary = summarize_stream_status(
+        config,
+        symbols=selected,
+        archive_path=archive_path,
+        max_age_seconds=max_age_seconds,
+    )
+    color = "green" if summary.fresh else "yellow"
+    console.print(
+        Panel(
+            (
+                f"fresh={summary.fresh} | events_read={summary.events_read} | "
+                f"max_age_seconds={summary.max_age_seconds} | "
+                f"archives={len(summary.archive_paths)}"
+            ),
+            title="OKX Stream Freshness",
+            border_style=color,
+        )
+    )
+    table = Table(title="Required OKX Stream Channels", box=box.SIMPLE_HEAVY)
+    table.add_column("Symbol", style="bold")
+    table.add_column("Channel")
+    table.add_column("Fresh")
+    table.add_column("Count", justify="right")
+    table.add_column("Age Sec", justify="right")
+    table.add_column("Last Received")
+    table.add_column("Message")
+    for row in summary.rows:
+        fresh_style = "green" if row.fresh else "yellow"
+        table.add_row(
+            row.symbol,
+            row.channel,
+            f"[{fresh_style}]{'yes' if row.fresh else 'no'}[/{fresh_style}]",
+            str(row.count),
+            f"{row.age_seconds:.1f}" if row.age_seconds is not None else "-",
+            row.last_received_at or "-",
+            row.message,
+        )
+    console.print(table)
+    if summary.archive_paths:
+        console.print("[dim]Archives:[/dim] " + ", ".join(str(path) for path in summary.archive_paths))
+
+
 @app.command("crypto-hyperliquid-stream")
 def crypto_hyperliquid_stream(
     symbols: str = typer.Option(
@@ -2897,10 +3049,12 @@ def crypto_hyperliquid_stream_status(
 ):
     """Show freshness of archived Hyperliquid WebSocket events."""
 
+    from dataclasses import replace
+
     from tradingagents.crypto import CryptoTradingConfig, summarize_stream_status
 
     selected = tuple(item.strip().upper() for item in symbols.split(",") if item.strip())
-    config = CryptoTradingConfig.from_env()
+    config = replace(CryptoTradingConfig.from_env(), exchange_provider="hyperliquid")
     summary = summarize_stream_status(
         config,
         symbols=selected,

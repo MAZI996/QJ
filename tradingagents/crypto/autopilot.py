@@ -243,9 +243,11 @@ def _stream_stop_reason(summary: StreamStatusSummary) -> str:
         f"{row.symbol}:{row.channel}" for row in summary.missing_or_stale[:5]
     )
     suffix = f"; first missing/stale={missing}" if missing else ""
+    provider = summary.provider.strip().lower()
+    command = "crypto-okx-stream" if provider == "okx" else "crypto-hyperliquid-stream"
     return (
-        "Hyperliquid WebSocket stream is stale or missing; "
-        "run crypto-hyperliquid-stream before autopilot entries"
+        f"{provider.upper()} WebSocket stream is stale or missing; "
+        f"run {command} before autopilot entries"
         f"{suffix}."
     )
 
@@ -256,6 +258,7 @@ def _stream_context(summary: StreamStatusSummary) -> dict[str, object]:
         "events_read": summary.events_read,
         "max_age_seconds": summary.max_age_seconds,
         "latest_event_at": summary.latest_event_at,
+        "provider": summary.provider,
         "archive_paths": [str(path) for path in summary.archive_paths],
         "missing_or_stale": [
             {

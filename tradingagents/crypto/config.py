@@ -54,6 +54,8 @@ class CryptoTradingConfig:
     futures_base_url: str | None = None
     recv_window_ms: int = 5000
     okx_base_url: str | None = None
+    okx_ws_public_url: str | None = None
+    okx_ws_business_url: str | None = None
     okx_demo: bool = True
     okx_api_key: str = ""
     okx_api_secret: str = ""
@@ -160,6 +162,22 @@ class CryptoTradingConfig:
         return "https://www.okx.com"
 
     @property
+    def resolved_okx_ws_public_url(self) -> str:
+        if self.okx_ws_public_url:
+            return self.okx_ws_public_url.rstrip("/")
+        if self.okx_demo:
+            return "wss://wspap.okx.com:8443/ws/v5/public"
+        return "wss://ws.okx.com:8443/ws/v5/public"
+
+    @property
+    def resolved_okx_ws_business_url(self) -> str:
+        if self.okx_ws_business_url:
+            return self.okx_ws_business_url.rstrip("/")
+        if self.okx_demo:
+            return "wss://wspap.okx.com:8443/ws/v5/business"
+        return "wss://ws.okx.com:8443/ws/v5/business"
+
+    @property
     def resolved_hyperliquid_base_url(self) -> str:
         if self.hyperliquid_base_url:
             return self.hyperliquid_base_url.rstrip("/")
@@ -182,6 +200,8 @@ class CryptoTradingConfig:
             futures_base_url=os.getenv(prefix + "BINANCE_FUTURES_BASE_URL") or None,
             recv_window_ms=_int_env(prefix + "BINANCE_RECV_WINDOW_MS", 5000),
             okx_base_url=os.getenv(prefix + "OKX_BASE_URL") or None,
+            okx_ws_public_url=os.getenv(prefix + "OKX_WS_PUBLIC_URL") or None,
+            okx_ws_business_url=os.getenv(prefix + "OKX_WS_BUSINESS_URL") or None,
             okx_demo=_bool_env(prefix + "OKX_DEMO", True),
             okx_api_key=os.getenv("OKX_API_KEY", os.getenv(prefix + "OKX_API_KEY", "")),
             okx_api_secret=os.getenv("OKX_API_SECRET", os.getenv(prefix + "OKX_API_SECRET", "")),
