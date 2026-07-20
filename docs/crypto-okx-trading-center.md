@@ -45,12 +45,14 @@ are configured.
 ## Analysis Scan
 
 ```powershell
-.\.venv\Scripts\python.exe -m cli.main crypto-scan --symbols BTC,ETH,SOL,XRP --mode analysis --no-market-quality
+.\.venv\Scripts\python.exe -m cli.main crypto-market-quality --provider okx --mainnet --symbols BTC,ETH,SOL,XRP
+.\.venv\Scripts\python.exe -m cli.main crypto-scan --symbols BTC,ETH,SOL,XRP --mode analysis
 ```
 
-The current market-quality gate is still Hyperliquid-specific, so use
-`--no-market-quality` for early OKX scans until the OKX order-book/funding gate
-is promoted.
+The OKX market-quality gate is enabled by default. It checks spread, correctly
+converted contract depth, order-book imbalance, the latest realized funding
+rate, and current USD open interest before risk sizing. A rejected BUY is
+demoted to HOLD before it reaches the risk manager.
 
 ## Real-Time Stream Archive
 
@@ -82,12 +84,12 @@ events before entries are allowed.
 
 ## Current Boundary
 
-This layer can analyze OKX market data and archive live public WebSocket events.
+This layer can analyze OKX market data, enforce the OKX market-quality gate, and
+archive live public WebSocket events.
 It does not yet submit OKX orders or auto-close OKX positions. The next safe
 steps are:
 
-1. Add OKX market-quality scoring from books/funding/open interest.
-2. Add OKX demo order adapter for entry and reduce-only exits.
-3. Add OKX live-readiness checks for account mode, permissions, leverage,
+1. Add OKX demo order adapter for entry and reduce-only exits.
+2. Add OKX live-readiness checks for account mode, permissions, leverage,
    position mode, protective orders, emergency stop, and paper evidence.
-4. Promote from analysis/paper to demo execution only after diagnostics pass.
+3. Promote from analysis/paper to demo execution only after diagnostics pass.

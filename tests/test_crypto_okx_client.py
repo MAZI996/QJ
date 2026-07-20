@@ -80,6 +80,44 @@ def test_okx_client_maps_public_market_payloads(monkeypatch):
                             "lotSz": "0.01",
                             "tickSz": "0.1",
                             "ctVal": "0.01",
+                            "ctType": "linear",
+                            "ctValCcy": "BTC",
+                            "state": "live",
+                        }
+                    ],
+                }
+            )
+        if path == "/api/v5/public/funding-rate-history":
+            assert query["instId"] == ["BTC-USDT-SWAP"]
+            assert query["limit"] == ["1"]
+            return _response(
+                {
+                    "code": "0",
+                    "msg": "",
+                    "data": [
+                        {
+                            "instId": "BTC-USDT-SWAP",
+                            "fundingRate": "0.00012",
+                            "realizedRate": "0.00010",
+                            "fundingTime": "1720000000200",
+                        }
+                    ],
+                }
+            )
+        if path == "/api/v5/public/open-interest":
+            assert query["instType"] == ["SWAP"]
+            assert query["instId"] == ["BTC-USDT-SWAP"]
+            return _response(
+                {
+                    "code": "0",
+                    "msg": "",
+                    "data": [
+                        {
+                            "instId": "BTC-USDT-SWAP",
+                            "oi": "5000",
+                            "oiCcy": "50",
+                            "oiUsd": "5000000",
+                            "ts": "1720000000300",
                         }
                     ],
                 }
@@ -112,6 +150,24 @@ def test_okx_client_maps_public_market_payloads(monkeypatch):
     assert rules.quote_asset == "USDT"
     assert rules.min_qty == 0.01
     assert rules.step_size == 0.01
+
+    instrument = client.get_instrument("BTC")
+    assert instrument.contract_type == "linear"
+    assert instrument.notional_usd(price=100_000, size=10) == 10_000
+
+    funding = client.get_latest_funding_rate("BTC")
+    assert funding.funding_rate == 0.00012
+    assert funding.realized_rate == 0.00010
+    assert funding.effective_rate == 0.00010
+
+    open_interest = client.get_open_interest("BTC")
+    assert open_interest.contracts == 5000
+    assert open_interest.currency == 50
+    assert open_interest.usd == 5_000_000
+
+    context = client.get_market_context("BTC")
+    assert context["funding"] == 0.00010
+    assert context["openInterestUsd"] == 5_000_000
 
     assert all(_header(request, "x-simulated-trading") == "1" for request in requests)
 

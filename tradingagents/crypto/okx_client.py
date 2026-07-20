@@ -36,6 +36,37 @@ class OKXInstrument:
     lot_size: float
     tick_size: float
     contract_value: float
+    contract_type: str = ""
+    contract_value_ccy: str = ""
+    state: str = ""
+
+    def notional_usd(self, *, price: float, size: float) -> float:
+        if self.contract_type == "inverse" and self.contract_value > 0:
+            return size * self.contract_value
+        if self.contract_type == "linear" and self.contract_value > 0:
+            return price * size * self.contract_value
+        return price * size
+
+
+@dataclass(frozen=True)
+class OKXFundingRate:
+    inst_id: str
+    funding_rate: float
+    realized_rate: float | None
+    funding_time_ms: int
+
+    @property
+    def effective_rate(self) -> float:
+        return self.realized_rate if self.realized_rate is not None else self.funding_rate
+
+
+@dataclass(frozen=True)
+class OKXOpenInterest:
+    inst_id: str
+    contracts: float
+    currency: float
+    usd: float
+    time_ms: int
 
 
 @dataclass(frozen=True)
@@ -81,6 +112,7 @@ class OKXOrderBook:
 class OKXClient:
     def __init__(self, config: CryptoTradingConfig):
         self.config = config
+        self._instrument_cache: dict[str, tuple[OKXInstrument, ...]] = {}
 
     def ping(self) -> dict[str, Any]:
         return {"server_time_ms": self.get_server_time()}
@@ -162,6 +194,9 @@ class OKXClient:
 
     def get_instruments(self, inst_type: str | None = None) -> list[OKXInstrument]:
         selected_type = (inst_type or self.config.okx_inst_type).strip().upper()
+        cached = self._instrument_cache.get(selected_type)
+        if cached is not None:
+            return list(cached)
         rows = self._public_get("/api/v5/public/instruments", {"instType": selected_type})
         instruments: list[OKXInstrument] = []
         for row in rows:
@@ -182,25 +217,78 @@ class OKXClient:
                     lot_size=_safe_float(row.get("lotSz")),
                     tick_size=_safe_float(row.get("tickSz")),
                     contract_value=_safe_float(row.get("ctVal")),
+                    contract_type=str(row.get("ctType", "")).lower(),
+                    contract_value_ccy=str(row.get("ctValCcy", "")).upper(),
+                    state=str(row.get("state", "")).lower(),
                 )
             )
-        return instruments
+        self._instrument_cache[selected_type] = tuple(instruments)
+        return list(instruments)
 
-    def get_symbol_rules(self, symbol: str) -> SymbolRules:
+    def get_instrument(self, symbol: str) -> OKXInstrument:
         inst_id = self.instrument_id(symbol)
         for instrument in self.get_instruments(self.config.okx_inst_type):
             if instrument.inst_id == inst_id:
-                return SymbolRules(
-                    symbol=self.normalize_symbol(inst_id),
-                    base_asset=instrument.base_ccy,
-                    quote_asset=instrument.quote_ccy
-                    or instrument.settle_ccy
-                    or self.config.okx_quote_ccy,
-                    min_qty=instrument.min_size,
-                    step_size=instrument.lot_size,
-                    min_notional=self.config.min_order_notional_usdt,
-                )
+                return instrument
         raise OKXAPIError(f"No OKX instrument metadata returned for {inst_id}.")
+
+    def get_symbol_rules(self, symbol: str) -> SymbolRules:
+        instrument = self.get_instrument(symbol)
+        return SymbolRules(
+            symbol=self.normalize_symbol(instrument.inst_id),
+            base_asset=instrument.base_ccy,
+            quote_asset=instrument.quote_ccy
+            or instrument.settle_ccy
+            or self.config.okx_quote_ccy,
+            min_qty=instrument.min_size,
+            step_size=instrument.lot_size,
+            min_notional=self.config.min_order_notional_usdt,
+        )
+
+    def get_latest_funding_rate(self, symbol: str) -> OKXFundingRate:
+        inst_id = self.instrument_id(symbol)
+        rows = self._public_get(
+            "/api/v5/public/funding-rate-history",
+            {"instId": inst_id, "limit": 1},
+        )
+        if not rows or not isinstance(rows[0], dict):
+            raise OKXAPIError(f"No OKX funding rate returned for {inst_id}.")
+        row = rows[0]
+        return OKXFundingRate(
+            inst_id=str(row.get("instId") or inst_id).upper(),
+            funding_rate=_safe_float(row.get("fundingRate")),
+            realized_rate=_safe_float_or_none(row.get("realizedRate")),
+            funding_time_ms=int(row.get("fundingTime", 0) or 0),
+        )
+
+    def get_open_interest(self, symbol: str) -> OKXOpenInterest:
+        inst_id = self.instrument_id(symbol)
+        rows = self._public_get(
+            "/api/v5/public/open-interest",
+            {"instType": self.config.okx_inst_type.strip().upper(), "instId": inst_id},
+        )
+        if not rows or not isinstance(rows[0], dict):
+            raise OKXAPIError(f"No OKX open interest returned for {inst_id}.")
+        row = rows[0]
+        return OKXOpenInterest(
+            inst_id=str(row.get("instId") or inst_id).upper(),
+            contracts=_safe_float(row.get("oi")),
+            currency=_safe_float(row.get("oiCcy")),
+            usd=_safe_float(row.get("oiUsd")),
+            time_ms=int(row.get("ts", 0) or 0),
+        )
+
+    def get_market_context(self, symbol: str) -> dict[str, Any]:
+        funding = self.get_latest_funding_rate(symbol)
+        open_interest = self.get_open_interest(symbol)
+        return {
+            "funding": funding.effective_rate,
+            "fundingTime": funding.funding_time_ms,
+            "openInterest": open_interest.contracts,
+            "openInterestCcy": open_interest.currency,
+            "openInterestUsd": open_interest.usd,
+            "openInterestTime": open_interest.time_ms,
+        }
 
     def get_open_interest_history(
         self,
@@ -413,3 +501,12 @@ def _safe_float(value: Any) -> float:
         return float(value)
     except (TypeError, ValueError):
         return 0.0
+
+
+def _safe_float_or_none(value: Any) -> float | None:
+    if value is None or value == "":
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None

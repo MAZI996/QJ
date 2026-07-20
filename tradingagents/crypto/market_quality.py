@@ -8,6 +8,7 @@ from typing import Any
 from .config import CryptoTradingConfig
 from .hyperliquid_client import HyperliquidAPIError, HyperliquidClient, HyperliquidOrderBook
 from .models import OpportunitySignal
+from .okx_client import OKXAPIError, OKXClient, OKXInstrument, OKXOrderBook
 
 
 @dataclass(frozen=True)
@@ -21,6 +22,7 @@ class MarketQualityDecision:
     imbalance: float | None = None
     funding_rate: float | None = None
     open_interest: float | None = None
+    open_interest_usd: float | None = None
     reasons: tuple[str, ...] = ()
 
 
@@ -41,13 +43,18 @@ class MarketQualityGate:
             )
 
         provider = self.config.exchange_provider.strip().lower()
-        if provider != "hyperliquid":
-            return MarketQualityDecision(
-                symbol=symbol,
-                approved=True,
-                score=1.0,
-                reasons=("market quality gate is currently Hyperliquid-specific",),
-            )
+        if provider == "okx":
+            return self._evaluate_okx(symbol)
+        if provider == "hyperliquid":
+            return self._evaluate_hyperliquid(symbol)
+        return MarketQualityDecision(
+            symbol=symbol,
+            approved=True,
+            score=1.0,
+            reasons=(f"market quality gate is not implemented for provider {provider}",),
+        )
+
+    def _evaluate_hyperliquid(self, symbol: str) -> MarketQualityDecision:
         if not isinstance(self.client, HyperliquidClient):
             return MarketQualityDecision(
                 symbol=symbol,
@@ -67,7 +74,50 @@ class MarketQualityGate:
                 reasons=(f"market quality data unavailable: {exc}",),
             )
 
-        return self._judge(book, context)
+        return self._judge(
+            symbol=book.coin,
+            book=book,
+            context=context,
+        )
+
+    def _evaluate_okx(self, symbol: str) -> MarketQualityDecision:
+        normalized = OKXClient.normalize_symbol(symbol)
+        if not isinstance(self.client, OKXClient):
+            return MarketQualityDecision(
+                symbol=normalized,
+                approved=False,
+                score=0.0,
+                reasons=("OKX market quality requires OKXClient",),
+            )
+        if self.config.okx_inst_type.strip().upper() != "SWAP":
+            return MarketQualityDecision(
+                symbol=normalized,
+                approved=False,
+                score=0.0,
+                reasons=("OKX market quality currently requires SWAP instruments",),
+            )
+        try:
+            book = self.client.get_order_book(
+                symbol,
+                depth=self.config.market_quality_depth_levels,
+            )
+            instrument = self.client.get_instrument(symbol)
+            context = self.client.get_market_context(symbol)
+        except OKXAPIError as exc:
+            return MarketQualityDecision(
+                symbol=normalized,
+                approved=False,
+                score=0.0,
+                reasons=(f"market quality data unavailable: {exc}",),
+            )
+
+        return self._judge(
+            symbol=normalized,
+            book=book,
+            context=context,
+            instrument=instrument,
+            require_open_interest_usd=True,
+        )
 
     def apply(self, signal: OpportunitySignal) -> OpportunitySignal:
         decision = self.evaluate(signal.symbol)
@@ -83,6 +133,8 @@ class MarketQualityGate:
             metrics["market_funding_rate"] = decision.funding_rate
         if decision.open_interest is not None:
             metrics["market_open_interest"] = decision.open_interest
+        if decision.open_interest_usd is not None:
+            metrics["market_open_interest_usd"] = decision.open_interest_usd
 
         reasons = tuple(
             list(signal.reasons)
@@ -99,16 +151,29 @@ class MarketQualityGate:
 
     def _judge(
         self,
-        book: HyperliquidOrderBook,
+        *,
+        symbol: str,
+        book: HyperliquidOrderBook | OKXOrderBook,
         context: dict[str, Any],
+        instrument: OKXInstrument | None = None,
+        require_open_interest_usd: bool = False,
     ) -> MarketQualityDecision:
         spread_bps = book.spread_bps
-        bid_depth = _depth_usdc(book.bids, self.config.market_quality_depth_levels)
-        ask_depth = _depth_usdc(book.asks, self.config.market_quality_depth_levels)
+        bid_depth = _depth_usdc(
+            book.bids,
+            self.config.market_quality_depth_levels,
+            instrument=instrument,
+        )
+        ask_depth = _depth_usdc(
+            book.asks,
+            self.config.market_quality_depth_levels,
+            instrument=instrument,
+        )
         total_depth = bid_depth + ask_depth
         imbalance = ((bid_depth - ask_depth) / total_depth) if total_depth > 0 else None
         funding_rate = _safe_float_or_none(context.get("funding"))
         open_interest = _safe_float_or_none(context.get("openInterest"))
+        open_interest_usd = _safe_float_or_none(context.get("openInterestUsd"))
 
         rejected: list[str] = []
         notes: list[str] = []
@@ -124,10 +189,10 @@ class MarketQualityGate:
         min_depth = self.config.market_quality_min_depth_usdc
         if bid_depth < min_depth or ask_depth < min_depth:
             rejected.append(
-                f"top depth bid/ask {bid_depth:.0f}/{ask_depth:.0f} USDC < {min_depth:.0f}"
+                f"top depth bid/ask {bid_depth:.0f}/{ask_depth:.0f} USD < {min_depth:.0f}"
             )
         else:
-            notes.append(f"top depth bid/ask {bid_depth:.0f}/{ask_depth:.0f} USDC")
+            notes.append(f"top depth bid/ask {bid_depth:.0f}/{ask_depth:.0f} USD")
 
         if (
             imbalance is not None
@@ -151,10 +216,30 @@ class MarketQualityGate:
         elif funding_rate is not None:
             notes.append(f"funding {funding_rate:+.5f}")
 
-        score = _quality_score(spread_bps, bid_depth, ask_depth, imbalance, funding_rate, self.config)
+        if require_open_interest_usd:
+            min_open_interest = self.config.market_quality_min_open_interest_usd
+            if open_interest_usd is None:
+                rejected.append("missing open interest USD")
+            elif open_interest_usd < min_open_interest:
+                rejected.append(
+                    f"open interest {open_interest_usd:.0f} USD < {min_open_interest:.0f}"
+                )
+            else:
+                notes.append(f"open interest {open_interest_usd:.0f} USD")
+
+        score = _quality_score(
+            spread_bps,
+            bid_depth,
+            ask_depth,
+            imbalance,
+            funding_rate,
+            open_interest_usd,
+            require_open_interest_usd,
+            self.config,
+        )
         reasons = tuple(rejected or notes or ("market quality data loaded",))
         return MarketQualityDecision(
-            symbol=book.coin,
+            symbol=symbol,
             approved=not rejected,
             score=score,
             spread_bps=spread_bps,
@@ -163,12 +248,24 @@ class MarketQualityGate:
             imbalance=imbalance,
             funding_rate=funding_rate,
             open_interest=open_interest,
+            open_interest_usd=open_interest_usd,
             reasons=reasons,
         )
 
 
-def _depth_usdc(levels: tuple[Any, ...], limit: int) -> float:
-    return sum(level.notional_usdc for level in levels[: max(1, limit)])
+def _depth_usdc(
+    levels: tuple[Any, ...],
+    limit: int,
+    *,
+    instrument: OKXInstrument | None = None,
+) -> float:
+    selected = levels[: max(1, limit)]
+    if instrument is not None:
+        return sum(
+            instrument.notional_usd(price=level.price, size=level.size)
+            for level in selected
+        )
+    return sum(level.notional_usdc for level in selected)
 
 
 def _safe_float_or_none(value: Any) -> float | None:
@@ -186,6 +283,8 @@ def _quality_score(
     ask_depth: float,
     imbalance: float | None,
     funding_rate: float | None,
+    open_interest_usd: float | None,
+    require_open_interest_usd: bool,
     config: CryptoTradingConfig,
 ) -> float:
     score = 1.0
@@ -205,4 +304,14 @@ def _quality_score(
     max_funding = max(config.market_quality_max_abs_funding_rate, 0.000001)
     if funding_rate is not None:
         score -= min(0.20, (abs(funding_rate) / max_funding) * 0.15)
+
+    if require_open_interest_usd:
+        min_open_interest = max(config.market_quality_min_open_interest_usd, 1.0)
+        if open_interest_usd is None:
+            score -= 0.20
+        elif open_interest_usd < min_open_interest:
+            score -= min(
+                0.20,
+                ((min_open_interest - open_interest_usd) / min_open_interest) * 0.20,
+            )
     return max(0.0, min(1.0, score))

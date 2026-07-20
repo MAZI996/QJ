@@ -112,6 +112,7 @@ class CryptoTradingConfig:
     market_quality_depth_levels: int = 5
     market_quality_max_abs_imbalance: float = 0.80
     market_quality_max_abs_funding_rate: float = 0.001
+    market_quality_min_open_interest_usd: float = 1_000_000.0
     entry_quality_enabled: bool = True
     entry_quality_min_close_position: float = 0.55
     entry_quality_min_trend_efficiency: float = 0.35
@@ -300,6 +301,10 @@ class CryptoTradingConfig:
             market_quality_max_abs_funding_rate=_float_env(
                 prefix + "MARKET_QUALITY_MAX_ABS_FUNDING_RATE",
                 0.001,
+            ),
+            market_quality_min_open_interest_usd=_float_env(
+                prefix + "MARKET_QUALITY_MIN_OPEN_INTEREST_USD",
+                1_000_000.0,
             ),
             entry_quality_enabled=_bool_env(prefix + "ENTRY_QUALITY_ENABLED", True),
             entry_quality_min_close_position=_float_env(

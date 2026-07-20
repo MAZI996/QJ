@@ -57,7 +57,7 @@ Never paste private keys into chat or docs.
 
 ```powershell
 .\.venv\Scripts\python.exe -m cli.main crypto-hyperliquid-check --mainnet --symbol BTC
-.\.venv\Scripts\python.exe -m cli.main crypto-market-quality --mainnet --symbols BTC,ETH,SOL,HYPE
+.\.venv\Scripts\python.exe -m cli.main crypto-market-quality --provider hyperliquid --mainnet --symbols BTC,ETH,SOL,HYPE
 .\.venv\Scripts\python.exe -m cli.main crypto-live-readiness --target paper
 ```
 

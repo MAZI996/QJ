@@ -2719,14 +2719,19 @@ def crypto_hyperliquid_markets(
 @app.command("crypto-market-quality")
 def crypto_market_quality(
     symbols: str = typer.Option(
-        "BTC,ETH,SOL,HYPE",
+        "BTC,ETH,SOL,XRP",
         "--symbols",
-        help="Comma-separated Hyperliquid coins to inspect.",
+        help="Comma-separated coins to inspect on the selected provider.",
+    ),
+    provider: Optional[str] = typer.Option(
+        None,
+        "--provider",
+        help="Market provider: okx or hyperliquid. Defaults to configured provider.",
     ),
     mainnet: bool = typer.Option(
         False,
         "--mainnet",
-        help="Use https://api.hyperliquid.xyz instead of the default testnet URL.",
+        help="Use production public market-data endpoints instead of demo/testnet mode.",
     ),
     max_spread_bps: Optional[float] = typer.Option(
         None,
@@ -2739,39 +2744,62 @@ def crypto_market_quality(
         help="Override minimum bid and ask depth across configured top levels.",
     ),
 ):
-    """Inspect Hyperliquid spread, depth, imbalance, and funding gates."""
+    """Inspect venue spread, depth, imbalance, funding, and open-interest gates."""
 
     from dataclasses import replace
 
-    from tradingagents.crypto import CryptoTradingConfig, HyperliquidClient, MarketQualityGate
+    from tradingagents.crypto import (
+        CryptoTradingConfig,
+        HyperliquidClient,
+        MarketQualityGate,
+        OKXClient,
+    )
 
-    config = replace(CryptoTradingConfig.from_env(), exchange_provider="hyperliquid")
+    config = CryptoTradingConfig.from_env()
+    selected_provider = (provider or config.exchange_provider).strip().lower()
+    if selected_provider not in {"okx", "hyperliquid"}:
+        raise typer.BadParameter("--provider must be okx or hyperliquid")
+    config = replace(config, exchange_provider=selected_provider)
     if mainnet:
-        config = replace(config, hyperliquid_testnet=False)
+        if selected_provider == "okx":
+            config = replace(config, okx_demo=False)
+        else:
+            config = replace(config, hyperliquid_testnet=False)
     if max_spread_bps is not None:
         config = replace(config, market_quality_max_spread_bps=max_spread_bps)
     if min_depth_usdc is not None:
         config = replace(config, market_quality_min_depth_usdc=min_depth_usdc)
 
-    client = HyperliquidClient(config)
+    client = OKXClient(config) if selected_provider == "okx" else HyperliquidClient(config)
     gate = MarketQualityGate(config, client)
     selected = tuple(item.strip().upper() for item in symbols.split(",") if item.strip())
+    endpoint = (
+        config.resolved_okx_base_url
+        if selected_provider == "okx"
+        else config.resolved_hyperliquid_base_url
+    )
+
+    def compact_amount(value: float) -> str:
+        for divisor, suffix in ((1_000_000_000, "B"), (1_000_000, "M"), (1_000, "K")):
+            if abs(value) >= divisor:
+                return f"{value / divisor:.1f}{suffix}"
+        return f"{value:.0f}"
 
     table = Table(
-        title=f"Hyperliquid Market Quality: {config.resolved_hyperliquid_base_url}",
+        title=f"{selected_provider.upper()} Market Quality: {endpoint}",
         box=box.SIMPLE_HEAVY,
     )
     table.add_column("Coin", style="bold")
     table.add_column("Pass")
     table.add_column("Score", justify="right")
-    table.add_column("Spread bps", justify="right")
-    table.add_column("Bid Depth", justify="right")
-    table.add_column("Ask Depth", justify="right")
-    table.add_column("Imbalance", justify="right")
+    table.add_column("Spread", justify="right")
+    table.add_column("Bid USD", justify="right")
+    table.add_column("Ask USD", justify="right")
+    table.add_column("Imbal", justify="right")
     table.add_column("Funding", justify="right")
-    table.add_column("Open Interest", justify="right")
-    table.add_column("Reason")
+    table.add_column("OI", justify="right")
 
+    details: list[str] = []
     for symbol in selected:
         decision = gate.evaluate(symbol)
         pass_style = "green" if decision.approved else "red"
@@ -2780,14 +2808,22 @@ def crypto_market_quality(
             f"[{pass_style}]{'yes' if decision.approved else 'no'}[/{pass_style}]",
             f"{decision.score:.2f}",
             f"{decision.spread_bps:.2f}" if decision.spread_bps is not None else "-",
-            f"{decision.bid_depth_usdc:.0f}",
-            f"{decision.ask_depth_usdc:.0f}",
+            compact_amount(decision.bid_depth_usdc),
+            compact_amount(decision.ask_depth_usdc),
             f"{decision.imbalance:+.2f}" if decision.imbalance is not None else "-",
             f"{decision.funding_rate:+.5f}" if decision.funding_rate is not None else "-",
-            f"{decision.open_interest:.0f}" if decision.open_interest is not None else "-",
-            "; ".join(decision.reasons),
+            (
+                compact_amount(decision.open_interest_usd)
+                if decision.open_interest_usd is not None
+                else compact_amount(decision.open_interest)
+                if decision.open_interest is not None
+                else "-"
+            ),
         )
+        details.append(f"[bold]{decision.symbol}[/bold]: {'; '.join(decision.reasons)}")
     console.print(table)
+    for detail in details:
+        console.print(detail)
 
 
 @app.command("crypto-okx-stream")

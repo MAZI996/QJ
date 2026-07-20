@@ -36,7 +36,7 @@ Mainnet public diagnostics:
 ```powershell
 python -m cli.main crypto-hyperliquid-check --mainnet --symbol BTC --wallet-address 0xYourWallet
 python -m cli.main crypto-hyperliquid-markets --mainnet --limit 20
-python -m cli.main crypto-market-quality --mainnet --symbols BTC,ETH,SOL,HYPE
+python -m cli.main crypto-market-quality --provider hyperliquid --mainnet --symbols BTC,ETH,SOL,HYPE
 python -m cli.main crypto-hyperliquid-account --mainnet --wallet-address 0xYourWallet
 python -m cli.main crypto-recover-orders --mainnet --wallet-address 0xYourWallet --symbols BTC,ETH,SOL,HYPE
 python -m cli.main crypto-live-readiness --target paper
