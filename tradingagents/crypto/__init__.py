@@ -126,7 +126,7 @@ from .paper_queue import (
     build_paper_queue_plan,
     paper_queue_output_paths,
 )
-from .paper_status import PaperStatusSummary, summarize_paper_status
+from .paper_status import PaperStatusSummary, PaperStreamEvidence, summarize_paper_status
 from .position_guardian import PositionGuardian, PositionGuardDecision, PositionGuardResult
 from .positions import PositionRecord, PositionStore
 from .protective_orders import ProtectiveOrderPlan
@@ -215,6 +215,7 @@ __all__ = [
     "PaperQueueItem",
     "PaperQueuePlan",
     "PaperStatusSummary",
+    "PaperStreamEvidence",
     "PerformanceSummary",
     "PositionGuardian",
     "PositionGuardDecision",

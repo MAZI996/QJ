@@ -2195,13 +2195,23 @@ def crypto_performance():
 
 
 @app.command("crypto-paper-status")
-def crypto_paper_status():
+def crypto_paper_status(
+    stream_max_age_seconds: int = typer.Option(
+        600,
+        "--stream-max-age-seconds",
+        help="Maximum accepted age for current WebSocket archive freshness evidence.",
+    ),
+):
     """Show local paper validation status and next queued command."""
 
     from tradingagents.crypto import CryptoTradingConfig, summarize_paper_status
 
+    if stream_max_age_seconds < 1:
+        raise typer.BadParameter("stream-max-age-seconds must be at least 1.")
+
     config = CryptoTradingConfig.from_env()
-    summary = summarize_paper_status(config)
+    summary = summarize_paper_status(config, stream_max_age_seconds=stream_max_age_seconds)
+    stream = summary.stream_evidence
     table = Table(title="Crypto Paper Status", box=box.SIMPLE_HEAVY)
     table.add_column("Metric")
     table.add_column("Value")
@@ -2214,6 +2224,26 @@ def crypto_paper_status():
     table.add_row("Queued candidates", str(summary.queue_ready_count))
     table.add_row("Top queue command", summary.queue_top_command or "-")
     table.add_row("Top queue note", summary.queue_top_note or "-")
+    table.add_row("Stream archive fresh", "yes" if stream.archive_fresh else "no")
+    table.add_row("Stream archive events", str(stream.archive_events))
+    table.add_row("Stream latest event", stream.archive_latest_event_at)
+    table.add_row(
+        "Stream fresh channels",
+        f"{stream.fresh_channels}/{stream.required_channels}",
+    )
+    table.add_row(
+        "Autopilot fresh stream cycles",
+        (
+            f"{stream.autopilot_fresh_stream_cycles}/"
+            f"{stream.autopilot_stream_cycles} "
+            f"({stream.fresh_cycle_ratio:.0%})"
+        ),
+    )
+    table.add_row("Autopilot stale stream cycles", str(stream.autopilot_stale_stream_cycles))
+    table.add_row(
+        "Stream missing/stale",
+        ", ".join(stream.missing_or_stale[:5]) or "-",
+    )
     console.print(table)
 
 

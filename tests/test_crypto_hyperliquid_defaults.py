@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import json
 import urllib.error
 from dataclasses import replace
+from datetime import UTC, datetime
 
 from tradingagents.crypto.config import CryptoTradingConfig
 from tradingagents.crypto.execution import ExecutionRouter
@@ -314,11 +316,77 @@ def test_paper_status_summarizes_journal_orders_and_queue(tmp_path):
 
     assert summary.decision_runs == 1
     assert summary.paper_orders == 1
+    assert summary.stream_evidence.archive_fresh is False
+    assert summary.stream_evidence.autopilot_stream_cycles == 0
     assert summary.last_action == "REJECT"
     assert summary.last_top_symbol == "-"
     assert summary.last_report_path == report_dir / f"workflow-20260518T000000Z-{run_id}.md"
     assert summary.queue_ready_count == 1
     assert "--mode paper" in summary.queue_top_command
+
+
+def test_paper_status_summarizes_stream_evidence(tmp_path):
+    now = datetime.now(UTC)
+    archive = tmp_path / "events" / "hyperliquid-ws-20260720.jsonl"
+    _write_required_stream_events(archive, now, symbol="BTC")
+    (tmp_path / "decision_journal.jsonl").write_text(
+        (
+            json.dumps(
+                {
+                    "run_id": "fresh",
+                    "created_at": now.isoformat(),
+                    "execution_mode": "paper",
+                    "context": {
+                        "command": "crypto-autopilot",
+                        "stream_freshness": {"fresh": True},
+                    },
+                    "summary": {"final_action": "BUY", "top_symbol": "BTC"},
+                }
+            )
+            + "\n"
+            + json.dumps(
+                {
+                    "run_id": "stale",
+                    "created_at": now.isoformat(),
+                    "execution_mode": "paper",
+                    "context": {
+                        "command": "crypto-autopilot",
+                        "stream_freshness": {"fresh": False},
+                    },
+                    "summary": {"final_action": "STOP", "top_symbol": None},
+                }
+            )
+            + "\n"
+        ),
+        encoding="utf-8",
+    )
+    config = replace(CryptoTradingConfig(), state_dir=tmp_path, symbols=("BTC",))
+
+    summary = summarize_paper_status(config, stream_max_age_seconds=600)
+
+    assert summary.stream_evidence.archive_fresh is True
+    assert summary.stream_evidence.archive_events == 5
+    assert summary.stream_evidence.required_channels == 5
+    assert summary.stream_evidence.fresh_channels == 5
+    assert summary.stream_evidence.autopilot_stream_cycles == 2
+    assert summary.stream_evidence.autopilot_fresh_stream_cycles == 1
+    assert summary.stream_evidence.autopilot_stale_stream_cycles == 1
+    assert summary.stream_evidence.fresh_cycle_ratio == 0.5
+
+
+def _write_required_stream_events(path, received_at, *, symbol: str):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    rows = [
+        {"channel": "allMids", "symbols": [], "received_at": received_at.isoformat()},
+        {"channel": "l2Book", "symbols": [symbol], "received_at": received_at.isoformat()},
+        {"channel": "trades", "symbols": [symbol], "received_at": received_at.isoformat()},
+        {"channel": "candle", "symbols": [symbol], "received_at": received_at.isoformat()},
+        {"channel": "activeAssetCtx", "symbols": [symbol], "received_at": received_at.isoformat()},
+    ]
+    path.write_text(
+        "".join(json.dumps(row) + "\n" for row in rows),
+        encoding="utf-8",
+    )
 
 
 def _signal() -> OpportunitySignal:

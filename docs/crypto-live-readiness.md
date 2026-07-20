@@ -27,6 +27,7 @@ Fresh stream evidence comes from the local Hyperliquid WebSocket archive:
 ```powershell
 python -m cli.main crypto-hyperliquid-stream --mainnet --symbols BTC,ETH,SOL,HYPE --seconds 0
 python -m cli.main crypto-hyperliquid-stream-status --symbols BTC,ETH,SOL,HYPE --max-age-seconds 600
+python -m cli.main crypto-paper-status
 ```
 
 ## 2. Position Management

@@ -27,6 +27,25 @@ Custom output:
 python -m cli.main crypto-paper-queue --mainnet --symbols BTC,HYPE --output reports/hyperliquid-paper-queue
 ```
 
+## Paper Evidence
+
+`crypto-paper-status` is the read-only evidence summary before testnet/live
+promotion. It now includes both order/journal counts and WebSocket stream
+evidence:
+
+- current stream archive freshness
+- archive event count and latest event timestamp
+- fresh required channels versus total required channels
+- autopilot cycles that recorded fresh stream evidence
+- autopilot cycles that recorded stale stream evidence
+
+Run the stream service before paper loops:
+
+```powershell
+python -m cli.main crypto-hyperliquid-stream --mainnet --symbols BTC,ETH,SOL,HYPE --seconds 0
+python -m cli.main crypto-autopilot --symbols BTC,ETH,SOL,HYPE --mode paper --execute-top --auto-close --cycles 0 --interval-seconds 300
+```
+
 ## Safety Boundary
 
 - Queue items are generated only from backtest candidates.
