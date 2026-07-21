@@ -105,6 +105,14 @@ the existing TradingAgents chain:
 .\.venv\Scripts\python.exe -m cli.main crypto-autopilot --symbols BTC,ETH,SOL,XRP --mode testnet --ai-review --execute-top --auto-close --cycles 12 --interval-seconds 300
 ```
 
+For the Hermes deployment, do not enable that loop directly. First deploy and
+run `scripts/hermes/okx_demo_controlled_trial.sh`. The script requires a
+one-time `ARM_OKX_DEMO_TRIAL` file, shares the analysis watchdog lock, hard-caps
+demo risk, opens at most one entry window, immediately restores the emergency
+stop, and then permits only reduce-only guardian exits. The emergency stop
+continues to block every new entry while allowing an existing long position to
+be closed safely.
+
 BUY intents are converted from base-coin quantity to OKX contract size and are
 submitted with attached mark-price TP/SL orders. SELL intents must be
 reduce-only; the adapter reads the actual positive net long position and caps

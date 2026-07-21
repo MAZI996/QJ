@@ -158,6 +158,31 @@ def test_okx_demo_execution_blocks_when_emergency_stop_is_active(tmp_path):
     assert "Emergency stop file exists" in result.message
 
 
+def test_okx_demo_emergency_stop_allows_reduce_only_exit(tmp_path):
+    emergency_stop = tmp_path / "STOP"
+    emergency_stop.touch()
+    client = _FakeOKXExecutionClient(position_contracts="5")
+    intent = replace(
+        _intent(),
+        side="SELL",
+        reduce_only=True,
+        stop_loss=None,
+        take_profit=None,
+        reason="position_guardian:emergency_exit",
+    )
+
+    result = OKXExecutionAdapter(
+        replace(_config(), emergency_stop_file=emergency_stop),
+        client=client,
+        sleep=lambda _seconds: None,
+        client_order_id_factory=lambda: "taexitstop1",
+    ).execute(intent, mode="testnet")
+
+    assert result.accepted is True
+    assert client.orders[0]["side"] == "sell"
+    assert client.orders[0]["reduceOnly"] is True
+
+
 def test_okx_demo_recovers_transport_timeout_by_client_order_id(tmp_path):
     client = _FakeOKXExecutionClient(transport_error_on_place=True)
     adapter = OKXExecutionAdapter(
