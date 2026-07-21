@@ -31,7 +31,11 @@ class ExecutionRouter:
         live_confirmation: str = "",
     ) -> OrderResult:
         selected_mode = mode or self.config.execution_mode
-        if self.config.emergency_stop_file and self.config.emergency_stop_file.exists():
+        if (
+            self.config.emergency_stop_file
+            and self.config.emergency_stop_file.exists()
+            and not (intent.side == "SELL" and intent.reduce_only)
+        ):
             return self._blocked(
                 intent,
                 f"Emergency stop file exists: {self.config.emergency_stop_file}",

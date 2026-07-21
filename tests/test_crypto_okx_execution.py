@@ -238,6 +238,37 @@ def test_okx_execution_router_tracks_only_the_confirmed_fill(tmp_path):
     assert position.avg_entry_price == 100.2
 
 
+def test_okx_execution_router_emergency_stop_allows_reduce_only_exit(tmp_path):
+    emergency_stop = tmp_path / "STOP"
+    emergency_stop.touch()
+    config = replace(
+        _config(),
+        state_dir=tmp_path,
+        emergency_stop_file=emergency_stop,
+    )
+    client = _FakeOKXExecutionClient(position_contracts="5")
+    router = ExecutionRouter(client, config)
+    router.okx_execution = OKXExecutionAdapter(
+        config,
+        client=client,
+        sleep=lambda _seconds: None,
+        client_order_id_factory=lambda: "tastopclose1",
+    )
+    intent = replace(
+        _intent(),
+        side="SELL",
+        quantity=0.1,
+        reduce_only=True,
+        stop_loss=None,
+        take_profit=None,
+    )
+
+    result = router.execute(intent, mode="testnet")
+
+    assert result.accepted is True
+    assert client.orders[0]["reduceOnly"] is True
+
+
 def test_okx_demo_readiness_reports_missing_credentials():
     config = replace(
         _config(),
