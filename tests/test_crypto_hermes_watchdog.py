@@ -16,6 +16,8 @@ def test_hermes_watchdog_is_analysis_only_and_credential_free():
     assert "TRADINGAGENTS_CRYPTO_OKX_DEMO_EXECUTION_ENABLED=false" in text
     assert "TRADINGAGENTS_CRYPTO_OKX_MAX_LEVERAGE=1" in text
     assert "unset OKX_API_KEY OKX_API_SECRET OKX_API_PASSPHRASE" in text
+    assert "OKX_DEMO_EMERGENCY_STOP" in text
+    assert 'install -m 600 /dev/null "$DEMO_EMERGENCY_STOP_FILE"' in text
     assert "--mode analysis" in text
     assert "--no-guard-positions" in text
     assert "--execute-top" not in text

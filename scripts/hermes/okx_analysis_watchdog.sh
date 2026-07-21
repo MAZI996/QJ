@@ -9,6 +9,7 @@ SYMBOLS="${TRADINGAGENTS_SYMBOLS:-BTC,ETH,SOL,XRP}"
 INTERVAL="${TRADINGAGENTS_INTERVAL:-15m}"
 STREAM_MAX_AGE_SECONDS="${TRADINGAGENTS_STREAM_MAX_AGE_SECONDS:-180}"
 STREAM_WARMUP_SECONDS="${TRADINGAGENTS_STREAM_WARMUP_SECONDS:-15}"
+DEMO_EMERGENCY_STOP_FILE="${TRADINGAGENTS_DEMO_EMERGENCY_STOP_FILE:-$STATE_DIR/OKX_DEMO_EMERGENCY_STOP}"
 
 LOG_DIR="$STATE_DIR/logs"
 STREAM_LOG="$LOG_DIR/okx-stream-watchdog.log"
@@ -20,6 +21,10 @@ exec 9>"$LOCK_FILE"
 if ! flock -n 9; then
     exit 0
 fi
+
+# Keep credential-bearing demo executors blocked while this deployment is in
+# analysis-only mode. Do not export this path to the analysis process itself.
+install -m 600 /dev/null "$DEMO_EMERGENCY_STOP_FILE"
 
 if [[ ! -d "$PROJECT_ROOT" || ! -x "$PYTHON_BIN" ]]; then
     printf 'QJ analysis watchdog cannot find its release or Python runtime.\n'

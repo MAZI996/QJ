@@ -56,9 +56,9 @@ hermes cron create "every 5m" \
 
 The watchdog removes inherited OKX credentials, forces analysis mode, keeps
 the demo execution switch off, enforces the 1x leverage policy, prevents
-overlapping cycles, and restarts the public OKX stream when it is absent.
-Successful ticks are silent; reports and logs are written beneath
-`TRADINGAGENTS_CRYPTO_STATE_DIR`.
+overlapping cycles, reasserts the demo emergency-stop file, and restarts the
+public OKX stream when it is absent. Successful ticks are silent; reports and
+logs are written beneath `TRADINGAGENTS_CRYPTO_STATE_DIR`.
 
 Hostinger's current Hermes image resolves cron script names beneath
 `/opt/data/scripts`, even though some CLI help text describes the directory as
