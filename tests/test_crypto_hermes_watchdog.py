@@ -34,6 +34,7 @@ def test_hermes_watchdog_prevents_overlapping_cycles_and_restarts_stream():
     text = SCRIPT.read_text(encoding="utf-8")
 
     assert "flock -n 9" in text
+    assert "exec 9>&-" in text
     assert "pgrep -f" in text
     assert "crypto-okx-stream" in text
     assert "--require-fresh-stream" in text
