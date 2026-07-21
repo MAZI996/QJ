@@ -137,8 +137,10 @@ class CryptoAutoPilot:
         stream_max_age_seconds: int = 600,
         stream_archive_path: Path | None = None,
     ) -> AutoPilotCycleResult:
+        mode = execution_mode or self.config.execution_mode
+        close_only = guard_positions and auto_close and not execute_top
         stop_reason = self._emergency_stop_reason()
-        if stop_reason:
+        if stop_reason and not close_only:
             return AutoPilotCycleResult(
                 cycle=cycle,
                 report=None,
@@ -147,7 +149,7 @@ class CryptoAutoPilot:
                 reason=stop_reason,
             )
         breaker = DailyLossCircuitBreaker(self.config).evaluate()
-        if breaker.blocked:
+        if breaker.blocked and not close_only:
             return AutoPilotCycleResult(
                 cycle=cycle,
                 report=None,
@@ -156,7 +158,6 @@ class CryptoAutoPilot:
                 reason=breaker.reason,
             )
 
-        mode = execution_mode or self.config.execution_mode
         engine: CryptoTradingEngine | None = None
         position_guard = None
         if guard_positions:
@@ -165,6 +166,16 @@ class CryptoAutoPilot:
                 mode=mode,
                 live_confirmation=live_confirmation,
                 execute=auto_close,
+            )
+        entry_block_reason = stop_reason or (breaker.reason if breaker.blocked else "")
+        if entry_block_reason:
+            return AutoPilotCycleResult(
+                cycle=cycle,
+                report=None,
+                saved=None,
+                stopped=True,
+                reason=entry_block_reason,
+                position_guard=position_guard,
             )
         stream_status = None
         if require_fresh_stream:

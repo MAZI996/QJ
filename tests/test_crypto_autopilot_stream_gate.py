@@ -9,6 +9,7 @@ import tradingagents.crypto.autopilot as autopilot_module
 from tradingagents.crypto.autopilot import CryptoAutoPilot
 from tradingagents.crypto.config import CryptoTradingConfig
 from tradingagents.crypto.decision_journal import DecisionJournalWrite
+from tradingagents.crypto.position_guardian import PositionGuardResult
 from tradingagents.crypto.workflow_report import CryptoWorkflowReport
 
 
@@ -85,6 +86,50 @@ def test_autopilot_records_fresh_stream_context(tmp_path, monkeypatch):
     assert stream_context["fresh"] is True
     assert stream_context["events_read"] == 5
     assert stream_context["missing_or_stale"] == []
+
+
+def test_autopilot_emergency_stop_still_runs_close_only_guardian(tmp_path, monkeypatch):
+    emergency_stop = tmp_path / "STOP"
+    emergency_stop.touch()
+    calls = []
+
+    class FakeEngine:
+        def __init__(self, _config):
+            self.client = object()
+
+    class FakeGuardian:
+        def __init__(self, _client, _config):
+            pass
+
+        def run(self, *, mode, live_confirmation, execute):
+            calls.append((mode, live_confirmation, execute))
+            return PositionGuardResult(enabled=True, mode=mode, decisions=())
+
+    class FailWorkflow:
+        def __init__(self, *_args, **_kwargs):
+            raise AssertionError("close-only emergency handling must not scan for entries")
+
+    monkeypatch.setattr(autopilot_module, "CryptoTradingEngine", FakeEngine)
+    monkeypatch.setattr(autopilot_module, "PositionGuardian", FakeGuardian)
+    monkeypatch.setattr(autopilot_module, "CryptoTradingAgentsWorkflow", FailWorkflow)
+    config = replace(
+        CryptoTradingConfig(),
+        state_dir=tmp_path,
+        emergency_stop_file=emergency_stop,
+    )
+
+    result = CryptoAutoPilot(config).run_once(
+        execution_mode="testnet",
+        execute_top=False,
+        guard_positions=True,
+        auto_close=True,
+        require_fresh_stream=False,
+    )
+
+    assert result.stopped is True
+    assert result.position_guard is not None
+    assert calls == [("testnet", "", True)]
+    assert "Emergency stop" in result.reason
 
 
 def _patch_workflow(monkeypatch, *, mode):

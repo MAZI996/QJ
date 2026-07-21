@@ -288,7 +288,10 @@ class OKXExecutionAdapter:
             return "OKX leverage cap must stay at exactly 1."
         if self.config.emergency_stop_file is None:
             return "OKX demo execution requires a configured emergency stop file path."
-        if self.config.emergency_stop_file.exists():
+        # Emergency stop freezes exposure increases without trapping an existing long.
+        if self.config.emergency_stop_file.exists() and not (
+            intent.side == "SELL" and intent.reduce_only
+        ):
             return f"Emergency stop file exists: {self.config.emergency_stop_file}"
         if not self.config.okx_require_net_mode:
             return "OKX demo execution does not allow disabling the net-mode requirement."
