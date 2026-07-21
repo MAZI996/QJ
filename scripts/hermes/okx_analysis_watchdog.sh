@@ -52,6 +52,8 @@ export TRADINGAGENTS_CRYPTO_STATE_DIR="$STATE_DIR"
 stream_pattern="crypto-okx-stream --symbols $SYMBOLS"
 if ! pgrep -f "$stream_pattern" >/dev/null 2>&1; then
     (
+        # The long-running stream must not inherit the cycle lock.
+        exec 9>&-
         cd "$PROJECT_ROOT"
         nohup "$PYTHON_BIN" -m cli.main crypto-okx-stream \
             --symbols "$SYMBOLS" \
